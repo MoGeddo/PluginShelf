@@ -77,7 +77,7 @@
                     <Border DockPanel.Dock="Bottom" Background="#121A2B" BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1" CornerRadius="12" Padding="13" Margin="0,14,0,0">
                         <StackPanel>
                             <TextBlock x:Name="PriorityTitleText" Text="Recommendation order" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" FontSize="12" />
-                            <TextBlock x:Name="PriorityHintText" Text="1) x64 first (x86 only if absent)&#x0a;2) VST3 → VST/DLL → CLAP&#x0a;3) Newest readable release in tier&#x0a;4) Ties/ambiguous → manual review" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" FontSize="11" LineHeight="16" Margin="0,6,0,0" />
+                            <TextBlock x:Name="PriorityHintText" Text="1) x64 first (x86 only if absent)&#x0a;2) VST3 → VST/DLL → CLAP&#x0a;3) Newest readable release in tier&#x0a;4) Ties → readable version → nearest path; aliases → manual" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" FontSize="11" LineHeight="16" Margin="0,6,0,0" />
                             <Border Background="#172338" BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1" CornerRadius="8" Padding="8,6" Margin="0,9,0,0">
                                 <TextBlock x:Name="WavesHintText" Text="Waves / WaveShell / WPAPI excluded · No file dates used" TextWrapping="Wrap" Foreground="{StaticResource WarningBrush}" FontSize="10" FontWeight="SemiBold" />
                             </Border>
@@ -167,7 +167,8 @@
                     <DockPanel Grid.Row="0" Margin="0,0,0,10" LastChildFill="True">
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="12,0,0,0">
                             <Button x:Name="SelectRecommendedButton" Content="Select strong recommendations" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" Click="SelectRecommendedButton_Click" />
-                            <Button x:Name="ClearSelectionButton" Content="Clear selection" Style="{StaticResource SecondaryButton}" Click="ClearSelectionButton_Click" />
+                            <Button x:Name="ClearSelectionButton" Content="Clear selection" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" Click="ClearSelectionButton_Click" />
+                            <Button x:Name="ToggleIncludedButton" Content="Show included groups" Style="{StaticResource SecondaryButton}" Visibility="Collapsed" Click="ToggleIncludedButton_Click" />
                         </StackPanel>
                         <StackPanel>
                             <TextBlock x:Name="ReviewTitle" Text="Review format variants" FontSize="24" FontWeight="Bold" />

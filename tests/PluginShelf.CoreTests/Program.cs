@@ -82,29 +82,47 @@ var latestWithinFormat = PluginGroupBuilder.Build([
 Assert(latestWithinFormat.Candidates.Single(c => c.Id == latestWithinFormat.RecommendedKeepId).Version == "3.07",
     "Newest embedded release is chosen within the preferred architecture and format; file dates are ignored");
 
-var versionTie = PluginGroupBuilder.Build([
-    Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
-        @"C:\Audio\Vst3\Filter-a.vst3", version: "3.08"),
-    Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
-        @"D:\Audio\Vst3\Filter-b.vst3", version: "3.8.0")
-]).Single();
-Assert(versionTie.HasConflictingTopCandidates && versionTie.RecommendedKeepId is null,
-    "Same-format candidates with equal release versions require manual review");
+var tieA = Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
+    @"C:\Audio\Vst3\Filter-a.vst3", version: "3.08");
+var tieB = Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
+    @"D:\Audio\Vst3\Filter-b.vst3", version: "3.8.0");
+var versionTie = PluginGroupBuilder.Build([tieA, tieB]).Single();
+Assert(!versionTie.HasConflictingTopCandidates && versionTie.RecommendedKeepId == tieA.Id,
+    "Equal release versions resolve deterministically to the canonical (shallower/first) path");
 
-var uncertainVersion = PluginGroupBuilder.Build([
-    Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
-        @"C:\Audio\Vst3\Filter-readable.vst3", version: "3.08"),
-    Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
-        @"D:\Audio\Vst3\Filter-unknown.vst3")
-]).Single();
-Assert(uncertainVersion.HasConflictingTopCandidates && uncertainVersion.RecommendedKeepId is null,
-    "Mixed readable and missing releases in the preferred format require manual review");
+var readableCopy = Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
+    @"C:\Audio\Vst3\Filter-readable.vst3", version: "3.08");
+var unknownCopy = Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
+    @"C:\Audio\Vst3\Brainworx\Filter-unknown.vst3");
+var uncertainVersion = PluginGroupBuilder.Build([readableCopy, unknownCopy]).Single();
+Assert(!uncertainVersion.HasConflictingTopCandidates && uncertainVersion.RecommendedKeepId == readableCopy.Id,
+    "A readable embedded release outranks a copy with missing version metadata");
+
+var shallowCopy = Candidate("Bx", "Brainworx", PluginFormat.Vst3, PluginArchitecture.X64,
+    @"C:\Program Files\Common Files\VST3\bx.vst3");
+var deepCopy = Candidate("Bx", "Brainworx", PluginFormat.Vst3, PluginArchitecture.X64,
+    @"C:\Program Files\Common Files\VST3\Brainworx\bx.vst3");
+var noVersions = PluginGroupBuilder.Build([deepCopy, shallowCopy]).Single();
+Assert(noVersions.RecommendedKeepId == shallowCopy.Id,
+    "Without readable versions the nearest (shallower) canonical path wins");
 
 var aliasA = Candidate("FabFilter Pro-Q 4", "FabFilter", PluginFormat.Vst3, PluginArchitecture.X64);
 var aliasB = Candidate("Pro-Q4", "FabFilter", PluginFormat.Vst, PluginArchitecture.X64);
 var alias = PluginGroupBuilder.Build([aliasA, aliasB]).Single();
 Assert(alias.NeedsIdentityConfirmation && alias.SelectedKeepId is null,
     "Vendor-prefixed aliases are suggested but require manual confirmation");
+
+var noVendorVst3 = Candidate("Loopcloud Sounds", "", PluginFormat.Vst3, PluginArchitecture.X64);
+var noVendorVst = Candidate("Loopcloud Sounds", "", PluginFormat.Vst, PluginArchitecture.X64);
+var noVendor = PluginGroupBuilder.Build([noVendorVst3, noVendorVst]).Single();
+Assert(!noVendor.NeedsIdentityConfirmation && noVendor.SelectedKeepId == noVendorVst3.Id,
+    "Identical names with missing vendor metadata are high confidence and pre-select the VST3 keeper");
+
+var clashA = Candidate("Generic Compressor", "Alpha", PluginFormat.Vst3, PluginArchitecture.X64);
+var clashB = Candidate("Generic Compressor", "Beta", PluginFormat.Vst, PluginArchitecture.X64);
+var clash = PluginGroupBuilder.Build([clashA, clashB]).Single();
+Assert(clash.NeedsIdentityConfirmation && clash.SelectedKeepId is null,
+    "Same name with conflicting vendor identities still requires manual confirmation");
 
 var n3 = PluginNameNormalizer.Normalize("Pro-Q 3", "FabFilter");
 var n4 = PluginNameNormalizer.Normalize("Pro-Q 4", "FabFilter");
@@ -146,19 +164,19 @@ Assert(PluginSafety.IsProtectedCandidate(@"C:\Audio\VST3\WaveShell.vst3", "Waves
 var sameVstA = Candidate("Equalizer", "Acme Audio", PluginFormat.Vst, PluginArchitecture.X64,
     @"C:\Audio\Vst\Equalizer.dll");
 var sameVstB = Candidate("Equalizer", "Acme Audio", PluginFormat.Vst, PluginArchitecture.X64,
-    @"C:\Audio\AltVst\Equalizer.dll");
+    @"C:\Audio\Alt\Vst\Equalizer.dll");
 var sameFormatGroup = PluginGroupBuilder.Build([sameVstA, sameVstB]).Single();
-Assert(sameFormatGroup.HasConflictingTopCandidates && sameFormatGroup.RecommendedKeepId is null,
-    "Same-format, same-architecture duplicates are shown for manual review, not ignored or auto-selected");
+Assert(!sameFormatGroup.HasConflictingTopCandidates && sameFormatGroup.RecommendedKeepId == sameVstA.Id,
+    "Same-format, same-architecture duplicates auto-resolve to the nearest canonical path");
 
 var tiedVst3A = Candidate("Equalizer", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
     @"C:\Audio\Vst3\Equalizer.vst3");
 var tiedVst3B = Candidate("Equalizer", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
-    @"C:\Audio\AltVst3\Equalizer.vst3");
+    @"C:\Audio\Alt\Vst3\Equalizer.vst3");
 var tiedVst2 = Candidate("Equalizer", "Acme Audio", PluginFormat.Vst, PluginArchitecture.X64);
 var tieGroup = PluginGroupBuilder.Build([tiedVst3A, tiedVst3B, tiedVst2]).Single();
-Assert(tieGroup.HasConflictingTopCandidates && tieGroup.RecommendedKeepId is null,
-    "Equal-priority copies require a manual keeper choice");
+Assert(!tieGroup.HasConflictingTopCandidates && tieGroup.RecommendedKeepId == tiedVst3A.Id,
+    "Equal-priority copies auto-resolve to the nearest canonical copy; no manual prompt");
 
 var x64Fixture = CreatePeFixture(machine: 0x8664, optionalMagic: 0x20B);
 var x86Fixture = CreatePeFixture(machine: 0x014C, optionalMagic: 0x10B);
