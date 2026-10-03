@@ -1,0 +1,207 @@
+<Window x:Class="PluginShelf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PluginShelf" Width="1280" Height="820" MinWidth="1040" MinHeight="680"
+        WindowStartupLocation="CenterScreen" Background="{StaticResource InkBrush}"
+        FontFamily="Segoe UI" Foreground="{StaticResource TextPrimaryBrush}">
+    <Grid x:Name="RootLayout" Background="{StaticResource InkBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="72" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#0E1524" BorderBrush="{StaticResource StrokeBrush}" BorderThickness="0,0,0,1">
+            <Grid Margin="24,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="38" Height="38" CornerRadius="12" Background="#1C3344" BorderBrush="#2C5963" BorderThickness="1">
+                        <TextBlock Text="PS" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="AppNameText" Text="Plugin Shelf" FontSize="17" FontWeight="Bold" />
+                        <TextBlock x:Name="AppTaglineText" Text="A safer, clearer plug-in library" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" />
+                    </StackPanel>
+                </StackPanel>
+                <TextBlock x:Name="TopStatusText" Grid.Column="1" Text="Preview first · nothing moves until you approve" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource TextMutedBrush}" FontSize="12" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Background="#15253A" BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,6" Margin="0,0,12,0">
+                        <TextBlock x:Name="SafeModeText" Text="SAFE MODE" Foreground="{StaticResource AccentBrush}" FontSize="10" FontWeight="Bold" />
+                    </Border>
+                    <Button x:Name="LanguageButton" Content="عربي | EN" Style="{StaticResource SecondaryButton}" Padding="12,7" Click="LanguageButton_Click" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="218" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="#0E1524" BorderBrush="{StaticResource StrokeBrush}" BorderThickness="0,0,1,0">
+                <DockPanel Margin="14,22,14,16">
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock x:Name="WorkspaceLabel" Text="WORKSPACE" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" Margin="12,2,0,12" />
+                        <Button x:Name="OverviewNav" Tag="Overview" Content="⌂    Overview" Style="{StaticResource SecondaryButton}" HorizontalContentAlignment="Left" Margin="0,2" Click="NavigationButton_Click" />
+                        <Button x:Name="ReviewNav" Tag="Review" Content="◉    Review variants" Style="{StaticResource SecondaryButton}" HorizontalContentAlignment="Left" Margin="0,2" Click="NavigationButton_Click" />
+                        <Button x:Name="QuarantineNav" Tag="Quarantine" Content="↺    Quarantine" Style="{StaticResource SecondaryButton}" HorizontalContentAlignment="Left" Margin="0,2" Click="NavigationButton_Click" />
+                        <Button x:Name="SettingsNav" Tag="Settings" Content="⚙    Settings" Style="{StaticResource SecondaryButton}" HorizontalContentAlignment="Left" Margin="0,2" Click="NavigationButton_Click" />
+                    </StackPanel>
+                    <Border DockPanel.Dock="Bottom" Background="#121A2B" BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1" CornerRadius="12" Padding="12" Margin="0,16,0,0">
+                        <StackPanel>
+                            <TextBlock x:Name="PriorityTitleText" Text="Recommendation order" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" FontSize="12" />
+                            <TextBlock x:Name="PriorityHintText" Text="x64 → VST3 → VST/DLL → CLAP → newest version within that tier" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" FontSize="11" Margin="0,5,0,0" />
+                            <TextBlock x:Name="WavesHintText" Text="Waves is excluded" Foreground="{StaticResource TextMutedBrush}" FontSize="10" Margin="0,9,0,0" />
+                        </StackPanel>
+                    </Border>
+                </DockPanel>
+            </Border>
+
+            <Grid Grid.Column="1" Margin="28,24,28,22">
+                <!-- OVERVIEW -->
+                <Grid x:Name="OverviewPage" Visibility="Visible">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Margin="0,0,0,18">
+                        <TextBlock x:Name="OverviewTitle" Text="Your plug-in library, under control" FontSize="26" FontWeight="Bold" />
+                        <TextBlock x:Name="OverviewSubtitle" Text="Find format duplicates, review every proposed change, and restore anything from quarantine." Foreground="{StaticResource TextMutedBrush}" FontSize="13" Margin="0,7,0,0" />
+                    </StackPanel>
+
+                    <Border Grid.Row="1" Style="{StaticResource CardBorder}" Padding="22" Margin="0,0,0,18">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock x:Name="ScanCardTitle" Text="Start with a read-only scan" FontSize="17" FontWeight="SemiBold" />
+                                <TextBlock x:Name="ScanCardDescription" Text="The scan reads plug-in metadata only. It never loads plug-in code and never moves files." Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,6,18,0" />
+                                <TextBlock x:Name="ScanStatusText" Text="Ready when you are." Foreground="{StaticResource AccentBrush}" FontSize="11" Margin="0,10,0,0" />
+                                <ProgressBar x:Name="ScanProgressBar" Height="5" Minimum="0" Maximum="100" Value="0" Margin="0,10,0,0" Background="#1B2940" Foreground="{StaticResource AccentBrush}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                <Button x:Name="ScanButton" Content="Scan folders" Style="{StaticResource PrimaryButton}" MinWidth="142" Click="ScanButton_Click" />
+                                <Button x:Name="CancelScanButton" Content="Cancel scan" Style="{StaticResource SecondaryButton}" Margin="0,8,0,0" IsEnabled="False" Click="CancelScanButton_Click" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <UniformGrid Grid.Row="2" Columns="4" Margin="0,0,0,18">
+                        <Border Style="{StaticResource CardBorder}" Margin="0,0,8,0" Padding="16">
+                            <StackPanel><TextBlock x:Name="PathsMetricLabel" Text="SCAN FOLDERS" FontSize="10" Foreground="{StaticResource TextMutedBrush}" FontWeight="Bold" /><TextBlock x:Name="PathsMetric" Text="11" FontSize="24" FontWeight="Bold" Margin="0,6,0,0" /><TextBlock x:Name="PathsMetricHint" Text="configured" FontSize="10" Foreground="{StaticResource TextMutedBrush}" /></StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource CardBorder}" Margin="6,0" Padding="16">
+                            <StackPanel><TextBlock x:Name="CandidatesMetricLabel" Text="CANDIDATES" FontSize="10" Foreground="{StaticResource TextMutedBrush}" FontWeight="Bold" /><TextBlock x:Name="CandidatesMetric" Text="—" FontSize="24" FontWeight="Bold" Margin="0,6,0,0" /><TextBlock x:Name="CandidatesMetricHint" Text="recognized items" FontSize="10" Foreground="{StaticResource TextMutedBrush}" /></StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource CardBorder}" Margin="6,0" Padding="16">
+                            <StackPanel><TextBlock x:Name="GroupsMetricLabel" Text="DUPLICATE GROUPS" FontSize="10" Foreground="{StaticResource TextMutedBrush}" FontWeight="Bold" /><TextBlock x:Name="GroupsMetric" Text="—" FontSize="24" FontWeight="Bold" Margin="0,6,0,0" /><TextBlock x:Name="GroupsMetricHint" Text="need a review" FontSize="10" Foreground="{StaticResource TextMutedBrush}" /></StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource CardBorder}" Margin="8,0,0,0" Padding="16">
+                            <StackPanel><TextBlock x:Name="QuarantineMetricLabel" Text="QUARANTINED" FontSize="10" Foreground="{StaticResource TextMutedBrush}" FontWeight="Bold" /><TextBlock x:Name="QuarantineMetric" Text="0" FontSize="24" FontWeight="Bold" Margin="0,6,0,0" /><TextBlock x:Name="QuarantineMetricHint" Text="restorable items" FontSize="10" Foreground="{StaticResource TextMutedBrush}" /></StackPanel>
+                        </Border>
+                    </UniformGrid>
+
+                    <Border Grid.Row="3" Style="{StaticResource CardBorder}" Padding="18">
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                            <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                                <StackPanel DockPanel.Dock="Left">
+                                    <TextBlock x:Name="RecentGroupsTitle" Text="Review queue" FontSize="15" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="RecentGroupsSubtitle" Text="Only confirmed plug-in variants can enter a quarantine plan." Foreground="{StaticResource TextMutedBrush}" FontSize="11" Margin="0,4,0,0" />
+                                </StackPanel>
+                                <Button x:Name="OpenReviewButton" Content="Open review" Style="{StaticResource SecondaryButton}" DockPanel.Dock="Right" Click="OpenReviewButton_Click" />
+                            </DockPanel>
+                            <DataGrid x:Name="OverviewGroupsGrid" Grid.Row="1" IsReadOnly="True" SelectionMode="Single" SelectionUnit="FullRow" CanUserSortColumns="False">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn x:Name="OverviewNameColumn" Header="Plug-in" Binding="{Binding DisplayName}" Width="2*" />
+                                    <DataGridTextColumn x:Name="OverviewVendorColumn" Header="Vendor" Binding="{Binding Vendor}" Width="*" />
+                                    <DataGridTextColumn x:Name="OverviewCountColumn" Header="Variants" Binding="{Binding CandidateCountLabel}" Width="*" />
+                                    <DataGridTextColumn x:Name="OverviewMatchColumn" Header="Match" Binding="{Binding MatchSummary}" Width="2*" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- REVIEW -->
+                <Grid x:Name="ReviewPage" Visibility="Collapsed">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" Margin="0,0,0,16" LastChildFill="True">
+                        <Button x:Name="SelectRecommendedButton" Content="Select strong recommendations" Style="{StaticResource SecondaryButton}" DockPanel.Dock="Right" Margin="14,0,0,0" Click="SelectRecommendedButton_Click" />
+                        <StackPanel>
+                            <TextBlock x:Name="ReviewTitle" Text="Review format variants" FontSize="25" FontWeight="Bold" />
+                            <TextBlock x:Name="ReviewSubtitle" Text="The suggested keeper is only a recommendation. Nothing changes until you apply." Foreground="{StaticResource TextMutedBrush}" FontSize="12" Margin="0,6,0,0" />
+                        </StackPanel>
+                    </DockPanel>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="GroupsPanel" />
+                    </ScrollViewer>
+                    <Border Grid.Row="2" Background="#0E1524" BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1,1,1,1" CornerRadius="14" Padding="14" Margin="0,14,0,0">
+                        <DockPanel>
+                            <TextBlock x:Name="ReviewFooterText" Text="Review each group. Ambiguous aliases stay untouched until confirmed." Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            <Button x:Name="ApplyButton" Content="Move selected variants to quarantine" Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right" Margin="14,0,0,0" IsEnabled="False" Click="ApplyButton_Click" />
+                        </DockPanel>
+                    </Border>
+                </Grid>
+
+                <!-- QUARANTINE -->
+                <Grid x:Name="QuarantinePage" Visibility="Collapsed">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Margin="0,0,0,16">
+                        <TextBlock x:Name="QuarantineTitle" Text="Recoverable quarantine" FontSize="25" FontWeight="Bold" />
+                        <TextBlock x:Name="QuarantineSubtitle" Text="Items are moved, never permanently deleted. Restore will not overwrite an existing original path." Foreground="{StaticResource TextMutedBrush}" FontSize="12" Margin="0,6,0,0" />
+                    </StackPanel>
+                    <Border Grid.Row="1" Style="{StaticResource CardBorder}" Padding="12">
+                        <DataGrid x:Name="QuarantineGrid" SelectionMode="Extended" SelectionUnit="FullRow" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn x:Name="QNameColumn" Header="Plug-in" Binding="{Binding PluginName}" Width="1.2*" />
+                                <DataGridTextColumn x:Name="QFormatColumn" Header="Format" Binding="{Binding Format}" Width="*" />
+                                <DataGridTextColumn x:Name="QArchColumn" Header="Architecture" Binding="{Binding Architecture}" Width="*" />
+                                <DataGridTextColumn x:Name="QMovedColumn" Header="Moved" Binding="{Binding MovedAt, StringFormat={}{0:yyyy-MM-dd HH:mm}}" Width="*" />
+                                <DataGridTextColumn x:Name="QPathColumn" Header="Original path" Binding="{Binding OriginalPath}" Width="3*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                    <DockPanel Grid.Row="2" Margin="0,14,0,0">
+                        <TextBlock x:Name="QuarantineFooterText" Text="Select one or more entries to restore." Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+                        <Button x:Name="RestoreButton" Content="Restore selected" Style="{StaticResource SecondaryButton}" DockPanel.Dock="Right" IsEnabled="False" Click="RestoreButton_Click" />
+                    </DockPanel>
+                </Grid>
+
+                <!-- SETTINGS -->
+                <Grid x:Name="SettingsPage" Visibility="Collapsed">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Margin="0,0,0,16">
+                        <TextBlock x:Name="SettingsTitle" Text="Scan settings" FontSize="25" FontWeight="Bold" />
+                        <TextBlock x:Name="SettingsSubtitle" Text="Add or remove scan folders. VST, VST3 and CLAP are recognized in this release." Foreground="{StaticResource TextMutedBrush}" FontSize="12" Margin="0,6,0,0" />
+                    </StackPanel>
+                    <Border Grid.Row="1" Style="{StaticResource CardBorder}" Padding="12">
+                        <DataGrid x:Name="RootsGrid" SelectionMode="Single" SelectionUnit="FullRow">
+                            <DataGrid.Columns>
+                                <DataGridCheckBoxColumn x:Name="RootEnabledColumn" Header="On" Binding="{Binding Enabled, UpdateSourceTrigger=PropertyChanged}" Width="54" />
+                                <DataGridTextColumn x:Name="RootPathColumn" Header="Folder path" Binding="{Binding Path, UpdateSourceTrigger=PropertyChanged}" Width="3*" />
+                                <DataGridTextColumn x:Name="RootKindColumn" Header="Known format scope" Binding="{Binding KindLabel}" IsReadOnly="True" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                    <DockPanel Grid.Row="2" Margin="0,14,0,0">
+                        <TextBlock x:Name="SettingsSafetyText" Text="WPAPI and all Waves-related paths/items are excluded. Custom folders use known formats only." Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button x:Name="AddFolderButton" Content="Add folder" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Click="AddFolderButton_Click" />
+                            <Button x:Name="RemoveFolderButton" Content="Remove selected" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Click="RemoveFolderButton_Click" />
+                            <Button x:Name="SaveSettingsButton" Content="Save settings" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" Click="SaveSettingsButton_Click" />
+                        </StackPanel>
+                    </DockPanel>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

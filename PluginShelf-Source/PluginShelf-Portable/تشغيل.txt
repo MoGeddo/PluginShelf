@@ -1,0 +1,24 @@
+Plugin Shelf — أداة ويندوز محمولة
+
+طريقة التشغيل:
+1) شغّل PluginShelf.exe على Windows 10/11 x64.
+2) اختر اللغة من زر English / العربية.
+3) اضغط «افحص المجلدات». الفحص للقراءة فقط.
+4) في «مراجعة الصيغ»، ضمّن المجموعات التي تريد تنظيفها. ترتيب التوصية: 64-bit أولًا (و32-bit فقط عند غياب 64-bit)، ثم VST3 ثم VST/DLL ثم CLAP، ثم أحدث إصدار مقروء داخل هذه الأولوية ونفس الجيل ونسخة I/O.
+5) الصيغة الأعلى أولوية تتقدم حتى لو كان رقم إصدار صيغة أدنى أعلى. إذا تعادلت النسخ داخل الأولوية نفسها، أو تعذرت مقارنة إصداراتها، اختر يدويًا. لا يستخدم التطبيق تاريخ تعديل الملف.
+6) اضغط «انقل المحدد إلى الحجر» ووافق على طلب Windows UAC إذا ظهر.
+7) الاسترجاع متاح من «الحجر والاسترجاع». لن يستبدل التطبيق أي ملف موجود في المسار الأصلي.
+
+المعمارية: 64-bit أولًا؛ لا تُستخدم نسخ 32-bit إلا إذا لم توجد نسخة 64-bit في المجموعة. أرقام أجيال المنتجات محفوظة، وكذلك علامات Mono/Stereo وSC؛ هذه نسخ I/O مختلفة وليست تكرارات بعضها لبعض. في FabFilter Volcano 2، النسخة القياسية تتكيف مع تخطيط القناة، بينما (Mono) و(SC) و(Mono SC) wrappers منفصلة لأسباب التوافق ومداخل side-chain.
+
+Waves وWaveShell وWPAPI مستثناة بالكامل. فحص هذا الإصدار يدعم VST/DLL وVST3 وCLAP، ويسمح بإضافة مجلدات بحث من الإعدادات. صيغ الملفات الجديدة مؤجلة حتى تُحدد قواعدها.
+
+النسخة محمولة ولا تحتاج تثبيت .NET. قد يعرض Windows تحذير SmartScreen لأن التطبيق غير موقّع رقميًا؛ لا تشغّل إلا الملف الذي نزّلته من هذه الحزمة.
+
+--- English ---
+
+Run PluginShelf.exe on Windows 10/11 x64. Scanning is read-only. In Review, opt in to groups. Ranking is x64 first (x86 only if no x64 candidate), then VST3 > VST/DLL > CLAP, then the newest readable embedded product release within that tier and the same generation/I/O variant. A higher release number in a lower-priority format does not win. Ties or missing/unreadable versions among multiple candidates in the winning tier require manual review. File modification dates are never used.
+
+Mono, Stereo, and side-chain (SC) wrappers remain distinct. For FabFilter Volcano 2, the standard VST2/VST3 version adapts to the track layout; `(Mono)`, `(SC)`, and `(Mono SC)` identify separate compatibility/I/O variants.
+
+Apply moves selected extras to a restorable quarantine and may request UAC. Restore never overwrites an existing original file. Waves/WaveShell/WPAPI are excluded. Built-in formats are VST/DLL, VST3, and CLAP. The app is self-contained and unsigned, so SmartScreen may display a warning.
