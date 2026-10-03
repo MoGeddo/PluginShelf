@@ -106,6 +106,18 @@ var alias = PluginGroupBuilder.Build([aliasA, aliasB]).Single();
 Assert(alias.NeedsIdentityConfirmation && alias.SelectedKeepId is null,
     "Vendor-prefixed aliases are suggested but require manual confirmation");
 
+var noVendorVst3 = Candidate("Loopcloud Sounds", "", PluginFormat.Vst3, PluginArchitecture.X64);
+var noVendorVst = Candidate("Loopcloud Sounds", "", PluginFormat.Vst, PluginArchitecture.X64);
+var noVendor = PluginGroupBuilder.Build([noVendorVst3, noVendorVst]).Single();
+Assert(!noVendor.NeedsIdentityConfirmation && noVendor.SelectedKeepId == noVendorVst3.Id,
+    "Identical names with missing vendor metadata are high confidence and pre-select the VST3 keeper");
+
+var clashA = Candidate("Generic Compressor", "Alpha", PluginFormat.Vst3, PluginArchitecture.X64);
+var clashB = Candidate("Generic Compressor", "Beta", PluginFormat.Vst, PluginArchitecture.X64);
+var clash = PluginGroupBuilder.Build([clashA, clashB]).Single();
+Assert(clash.NeedsIdentityConfirmation && clash.SelectedKeepId is null,
+    "Same name with conflicting vendor identities still requires manual confirmation");
+
 var n3 = PluginNameNormalizer.Normalize("Pro-Q 3", "FabFilter");
 var n4 = PluginNameNormalizer.Normalize("Pro-Q 4", "FabFilter");
 Assert(n3.CoreNameKey != n4.CoreNameKey, "Model generation digits are preserved during normalization");

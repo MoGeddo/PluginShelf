@@ -30,8 +30,12 @@ public static class PluginGroupBuilder
                 .Where(k => !string.IsNullOrWhiteSpace(k))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            var hasMissingVendor = members.Any(c => string.IsNullOrWhiteSpace(c.VendorKey));
-            var highConfidence = nameKeys == 1 && vendorKeys.Count == 1 && !hasMissingVendor;
+            // An identical normalized product/generation/I/O name is decisive on its own.
+            // Missing vendor metadata is common (many plug-ins embed none) and must not
+            // downgrade confidence, but two *different* vendor identities remain a
+            // possible alias and still require a human.
+            var conflictingVendors = vendorKeys.Count > 1;
+            var highConfidence = nameKeys == 1 && !conflictingVendors;
 
             // Channel/side-chain and product-generation markers are kept in CoreNameKey.
             // A vendor prefix can still be suggested as an alias, but never silently merged.
