@@ -9,7 +9,9 @@ public sealed record NormalizedPluginName(string NameKey, string CoreNameKey, st
 public static class PluginNameNormalizer
 {
     private static readonly Regex Separators = new("[^\\p{L}\\p{N}]+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex BitnessQualifiers = new("\\b(?:32|64)\\s*[-_ ]?\\s*bits?\\b|\\b(?:x86|x64|i386|i686|win32|win64)\\b", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex BitnessQualifiers = new(
+        "(?<![\\p{L}\\p{N}])(?:32|64)\\s*[-_ ]?\\s*bits?(?![\\p{L}\\p{N}])|(?<![\\p{L}\\p{N}])(?:x86|x64|i386|i686|win32|win64)(?![\\p{L}\\p{N}])",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly HashSet<string> FormatTokens = new(StringComparer.OrdinalIgnoreCase)
     {
         "vst", "vst1", "vst2", "vst3", "clap", "plugin", "plugins", "x86", "x64", "i386", "i686", "win32", "win64", "32bit", "64bit"
@@ -25,7 +27,7 @@ public static class PluginNameNormalizer
         // Strip a company prefix only for alias suggestions. The full NameKey is retained,
         // so a vendor-prefixed alias is never silently equated with an exact product name.
         var coreWords = new List<string>(nameWords);
-        if (vendorWords.Count > 0 && coreWords.Count >= vendorWords.Count)
+        if (vendorWords.Count > 0 && coreWords.Count > vendorWords.Count)
         {
             var prefixMatches = true;
             for (var i = 0; i < vendorWords.Count; i++)

@@ -140,6 +140,7 @@ public sealed class ScanResult
 public sealed class AppSettings
 {
     public string Language { get; set; } = "ar";
+    public double UiScale { get; set; } = 1.0;
     public List<ScanRoot> Roots { get; set; } = CreateDefaultRoots();
 
     public static List<ScanRoot> CreateDefaultRoots() =>

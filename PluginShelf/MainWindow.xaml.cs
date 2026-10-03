@@ -1,12 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Security;
-using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
-using Microsoft.Win32;
 using PluginShelf.Models;
 using PluginShelf.Services;
 using WinForms = System.Windows.Forms;
@@ -19,10 +16,12 @@ public partial class MainWindow : Window
     private readonly PluginScanner _scanner = new();
     private readonly ObservableCollection<QuarantineEntry> _quarantineRows = new();
     private AppSettings _settings;
+    private List<PluginCandidate> _lastCandidates = new();
     private List<PluginGroup> _groups = new();
     private CancellationTokenSource? _scanCancellation;
     private bool _isArabic;
     private bool _hasScanned;
+    private string _reviewFilter = "";
 
     private sealed class OverviewGroupRow
     {
@@ -38,6 +37,9 @@ public partial class MainWindow : Window
         _settings = SettingsService.Load();
         _isArabic = _settings.Language != "en";
 
+        FitToScreenWorkArea();
+        ApplyUiScale(_settings.UiScale, persist: false);
+
         RootsGrid.ItemsSource = _settings.Roots;
         QuarantineGrid.ItemsSource = _quarantineRows;
         OverviewGroupsGrid.ItemsSource = _groups;
@@ -47,6 +49,64 @@ public partial class MainWindow : Window
         RefreshQuarantine();
         UpdateMetrics(0, 0);
         NavigateTo("Overview");
+    }
+
+    private void FitToScreenWorkArea()
+    {
+        var workArea = SystemParameters.WorkArea;
+        if (workArea.Width > 0 && workArea.Height > 0)
+        {
+            Width = Math.Min(Width, Math.Max(MinWidth, Math.Floor(workArea.Width * 0.94)));
+            Height = Math.Min(Height, Math.Max(MinHeight, Math.Floor(workArea.Height * 0.92)));
+        }
+    }
+
+    private void ApplyUiScale(double scale, bool persist)
+    {
+        var clamped = Math.Round(Math.Clamp(double.IsFinite(scale) ? scale : 1.0, 0.85, 1.40), 2);
+        _settings.UiScale = clamped;
+        if (RootScaleTransform is not null)
+        {
+            RootScaleTransform.ScaleX = clamped;
+            RootScaleTransform.ScaleY = clamped;
+        }
+        if (ZoomResetButton is not null)
+        {
+            ZoomResetButton.Content = $"{(int)Math.Round(clamped * 100)}%";
+        }
+        if (persist)
+        {
+            SettingsService.Save(_settings);
+        }
+    }
+
+    private void ZoomInButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyUiScale(_settings.UiScale + 0.10, persist: true);
+
+    private void ZoomOutButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyUiScale(_settings.UiScale - 0.10, persist: true);
+
+    private void ZoomResetButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyUiScale(1.0, persist: true);
+
+    private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
+        if (e.Key is Key.OemPlus or Key.Add)
+        {
+            ApplyUiScale(_settings.UiScale + 0.10, persist: true);
+            e.Handled = true;
+        }
+        else if (e.Key is Key.OemMinus or Key.Subtract)
+        {
+            ApplyUiScale(_settings.UiScale - 0.10, persist: true);
+            e.Handled = true;
+        }
+        else if (e.Key is Key.D0 or Key.NumPad0)
+        {
+            ApplyUiScale(1.0, persist: true);
+            e.Handled = true;
+        }
     }
 
     private void LanguageButton_Click(object sender, RoutedEventArgs e)
@@ -60,10 +120,11 @@ public partial class MainWindow : Window
 
     private void UpdateLanguage()
     {
-        RootLayout.FlowDirection = _isArabic ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
-        OverviewGroupsGrid.FlowDirection = FlowDirection.LeftToRight;
-        QuarantineGrid.FlowDirection = FlowDirection.LeftToRight;
-        RootsGrid.FlowDirection = FlowDirection.LeftToRight;
+        var flow = _isArabic ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+        RootLayout.FlowDirection = flow;
+        OverviewGroupsGrid.FlowDirection = flow;
+        QuarantineGrid.FlowDirection = flow;
+        RootsGrid.FlowDirection = flow;
 
         AppNameText.Text = "Plugin Shelf";
         AppTaglineText.Text = L("AppTagline");
@@ -104,10 +165,15 @@ public partial class MainWindow : Window
         ReviewTitle.Text = L("ReviewTitle");
         ReviewSubtitle.Text = L("ReviewSubtitle");
         SelectRecommendedButton.Content = L("SelectRecommended");
+        ClearSelectionButton.Content = L("ClearSelection");
+        ReviewRulesBannerText.Text = L("ReviewRulesBanner");
+        ReviewSearchBox.ToolTip = L("SearchHint");
         ReviewFooterText.Text = L("ReviewFooter");
+
         QuarantineTitle.Text = L("QuarantineTitle");
         QuarantineSubtitle.Text = L("QuarantineSubtitle");
         QuarantineFooterText.Text = L("QuarantineFooter");
+        RefreshQuarantineButton.Content = L("RefreshQuarantine");
         RestoreButton.Content = L("RestoreSelected");
         QNameColumn.Header = L("PlugInColumn");
         QFormatColumn.Header = L("FormatColumn");
@@ -121,6 +187,7 @@ public partial class MainWindow : Window
         RootPathColumn.Header = L("FolderPathColumn");
         RootKindColumn.Header = L("FormatScopeColumn");
         SettingsSafetyText.Text = L("SettingsSafety");
+        ResetDefaultsButton.Content = L("ResetDefaults");
         AddFolderButton.Content = L("AddFolder");
         RemoveFolderButton.Content = L("RemoveFolder");
         SaveSettingsButton.Content = L("SaveSettings");
@@ -128,7 +195,7 @@ public partial class MainWindow : Window
         if (!_hasScanned)
             ScanStatusText.Text = L("Ready");
         RefreshOverviewGroupRows();
-        UpdateMetrics(_groups.Count == 0 ? 0 : _groups.Sum(g => g.Candidates.Count), _groups.Count);
+        UpdateMetrics(_hasScanned ? _lastCandidates.Count(c => c.IsLikelyPlugin) : 0, _groups.Count);
         UpdateApplyButton();
         UpdateRestoreButton();
     }
@@ -145,94 +212,105 @@ public partial class MainWindow : Window
             "ReviewNav" => ("مراجعة الصيغ", "Review variants"),
             "QuarantineNav" => ("الحجر والاسترجاع", "Quarantine"),
             "SettingsNav" => ("الإعدادات", "Settings"),
-            "PriorityTitle" => ("ترتيب الترشيح", "Recommendation order"),
-            "PriorityHint" => ("64-bit أولًا (و32-bit عند غيابه)؛ ثم VST3 > VST/DLL > CLAP؛ ثم أحدث إصدار داخل هذه الأولوية ونفس الجيل ونسخة I/O. لا تُستخدم تواريخ الملفات.", "x64 first (x86 only if absent); then VST3 > VST/DLL > CLAP; then newest release within that tier and the same generation/I/O identity. File dates are ignored."),
-            "WavesExcluded" => ("Waves مستثنى بالكامل", "Waves is fully excluded"),
+            "PriorityTitle" => ("ترتيب اختيار النسخة", "Selection rules"),
+            "PriorityHint" => (
+                "1) المعمارية: x64 أولًا (وx86 فقط عند غياب x64)\n2) الصيغة: VST3 ← VST/DLL ← CLAP\n3) أحدث إصدار مقروء داخل الفئة الفائزة لنفس الجيل وI/O\n4) التعادل أو تعذر المقارنة ← مراجعة يدوية",
+                "1) Architecture: x64 first (x86 only if absent)\n2) Format: VST3 → VST/DLL → CLAP\n3) Newest readable release in winning tier (same generation & I/O)\n4) Ties or incomparable versions → manual review"),
+            "WavesExcluded" => ("Waves / WaveShell / WPAPI مستثناة · لا تُستخدم تواريخ الملفات", "Waves / WaveShell / WPAPI excluded · File dates are never used"),
             "OverviewTitle" => ("مكتبة البلجنز تحت السيطرة", "Your plug-in library, under control"),
-            "OverviewSubtitle" => ("اكتشف تكرار الصيغ، راجع كل اقتراح، واسترجع أي عنصر من الحجر.", "Find format duplicates, review every proposal, and restore anything from quarantine."),
+            "OverviewSubtitle" => ("اكتشف تكرار الصيغ، راجع كل اقتراح يدويًا، واسترجع أي عنصر من الحجر القابل للاسترجاع.", "Find format duplicates, review every proposal manually, and restore anything from quarantine."),
             "ScanCardTitle" => ("ابدأ بفحص للقراءة فقط", "Start with a read-only scan"),
-            "ScanCardDescription" => ("الفحص يقرأ معلومات الملفات فقط. لا يشغّل كود أي بلجن ولا ينقل ملفات.", "The scan reads plug-in metadata only. It never loads plug-in code and never moves files."),
+            "ScanCardDescription" => ("الفحص يقرأ بيانات الملفات والحزم فقط (PE وmoduleinfo.json). لا يشغّل كود أي بلجن ولا ينقل أو يحذف أي ملف.", "The scan reads static metadata only (PE headers and moduleinfo.json). It never loads plug-in code and never moves or deletes files."),
             "Ready" => ("جاهز للفحص.", "Ready when you are."),
             "Scanning" => ("جاري فحص المجلدات…", "Scanning folders…"),
             "ScanButton" => ("افحص المجلدات", "Scan folders"),
             "CancelScan" => ("إلغاء الفحص", "Cancel scan"),
             "PathsMetricLabel" => ("مجلدات البحث", "SCAN FOLDERS"),
-            "Configured" => ("مُعدّة للفحص", "configured"),
+            "Configured" => ("مُفعّلة للفحص", "enabled for scan"),
             "CandidatesMetricLabel" => ("عناصر معروفة", "CANDIDATES"),
-            "RecognizedItems" => ("ملفات أو حزم محتملة", "recognized items"),
+            "RecognizedItems" => ("إضافات صوتية مكتشفة", "recognized plug-ins"),
             "GroupsMetricLabel" => ("مجموعات متكررة", "DUPLICATE GROUPS"),
-            "NeedReview" => ("تحتاج مراجعة", "need a review"),
+            "NeedReview" => ("تحتاج مراجعتك", "ready for review"),
             "QuarantineMetricLabel" => ("في الحجر", "QUARANTINED"),
             "RestorableItems" => ("عناصر قابلة للاسترجاع", "restorable items"),
             "RecentGroupsTitle" => ("قائمة المراجعة", "Review queue"),
-            "RecentGroupsSubtitle" => ("لن تدخل مجموعة ملتبسة في خطة الحجر إلا بعد تأكيدك.", "Ambiguous groups stay untouched until you confirm them."),
+            "RecentGroupsSubtitle" => ("لن تدخل أي مجموعة في خطة الحجر إلا بعد تحديدها وموافقتك.", "No group enters the quarantine plan until you select and approve it."),
             "OpenReview" => ("افتح المراجعة", "Open review"),
             "PlugInColumn" => ("البلجن", "Plug-in"),
             "VendorColumn" => ("الشركة", "Vendor"),
             "VariantsColumn" => ("النسخ", "Variants"),
-            "MatchColumn" => ("سبب المطابقة", "Match"),
-            "ReviewTitle" => ("راجع نسخ الصيغ", "Review format variants"),
-            "ReviewSubtitle" => ("النسخة المقترحة مجرد توصية؛ ضمّن المجموعات التي تريد تنظيفها بنفسك.", "The suggested keeper is only a recommendation; opt in to the groups you want cleaned."),
+            "MatchColumn" => ("حالة المطابقة والترشيح", "Match & recommendation status"),
+            "ReviewTitle" => ("مراجعة نسخ الصيغ", "Review format variants"),
+            "ReviewSubtitle" => ("النسخة المقترحة مجرد توصية؛ ضمّن المجموعات التي تريد تنظيفها بنفسك ولا يتم النقل إلا بعد موافقتك.", "The suggested keeper is only a recommendation; opt in to the groups you want cleaned. Nothing moves without your approval."),
             "SelectRecommended" => ("حدّد التوصيات الواضحة", "Select strong recommendations"),
-            "IncludeGroup" => ("ضمّن هذه المجموعة في خطة الحجر", "Include this group in the quarantine plan"),
-            "ReviewFooter" => ("المجموعات غير المحددة ستظل كما هي. الأسماء الملتبسة تحتاج تأكيدًا منفصلًا.", "Unselected groups stay untouched. Ambiguous aliases need separate confirmation."),
+            "ClearSelection" => ("إلغاء التحديد", "Clear selection"),
+            "ReviewRulesBanner" => (
+                "القواعد الثابتة: x64 أولًا ← VST3 ثم VST/DLL ثم CLAP (حتى لو كان إصدار صيغة أدنى أعلى) ← أحدث إصدار مقروء بنفس الجيل ونوع I/O (Mono / Stereo / SC منفصلة). التعادل أو الأسماء الملتبسة يُترك للمراجعة اليدوية بدون استخدام تاريخ الملف.",
+                "Strict rules: x64 first → VST3 > VST/DLL > CLAP (even if a lower format has a higher version) → newest readable release for the exact generation & I/O (Mono / Stereo / SC stay separate). Ties & aliases require manual choice; file dates are never used."),
+            "SearchHint" => ("صفِّ النتائج حسب اسم البلجن أو الشركة…", "Filter groups by plug-in or vendor name…"),
+            "IncludeGroup" => ("ضمّن هذه المجموعة في خطة الحجر (نقل النسخ غير المختارة إلى الحجر)", "Include this group in the quarantine plan (move non-selected variants to quarantine)"),
+            "ReviewFooter" => ("المجموعات غير المحددة ستظل كما هي. الأسماء الملتبسة والتعادلات تحتاج قرارًا يدويًا.", "Unselected groups stay untouched. Ambiguous aliases and ties require a manual decision."),
             "QuarantineTitle" => ("حجر قابل للاسترجاع", "Recoverable quarantine"),
-            "QuarantineSubtitle" => ("لا يوجد حذف نهائي. الاسترجاع لا يستبدل ملفًا موجودًا في المسار الأصلي.", "Items are moved, never permanently deleted. Restore will not overwrite an existing original path."),
-            "QuarantineFooter" => ("اختر عنصرًا أو أكثر لاسترجاعه.", "Select one or more entries to restore."),
+            "QuarantineSubtitle" => ("لا يوجد حذف نهائي. يحتفظ السجل بالمسار الأصلي، والاسترجاع لا يستبدل أي ملف موجود.", "No permanent deletion. Original paths are recorded, and restore never overwrites an existing file."),
+            "QuarantineFooter" => ("اختر عنصرًا أو أكثر لاسترجاعه إلى مساره الأصلي.", "Select one or more entries to restore to their original path."),
+            "RefreshQuarantine" => ("تحديث السجل", "Refresh"),
             "RestoreSelected" => ("استرجع المحدد", "Restore selected"),
             "FormatColumn" => ("الصيغة", "Format"),
             "ArchitectureColumn" => ("المعمارية", "Architecture"),
             "MovedColumn" => ("تاريخ النقل", "Moved"),
             "OriginalPathColumn" => ("المسار الأصلي", "Original path"),
             "SettingsTitle" => ("إعدادات الفحص", "Scan settings"),
-            "SettingsSubtitle" => ("أضف أو احذف مجلدات البحث. هذا الإصدار يتعرف على VST وVST3 وCLAP.", "Add or remove scan folders. VST, VST3 and CLAP are recognized in this release."),
+            "SettingsSubtitle" => ("أضف أو احذف مجلدات البحث المخصصة. يدعم الفحص التكراري صيغ VST/DLL وVST3 وCLAP.", "Add or remove custom scan folders. Recursive scanning supports VST/DLL, VST3, and CLAP."),
             "EnabledColumn" => ("مفعّل", "On"),
             "FolderPathColumn" => ("مسار المجلد", "Folder path"),
-            "FormatScopeColumn" => ("أنواع الملفات", "Known format scope"),
-            "SettingsSafety" => ("يُستثنى WPAPI وWaves بالكامل. المجلدات المخصصة تستخدم الصيغ المعروفة فقط.", "WPAPI and all Waves-related paths/items are excluded. Custom folders use known formats only."),
+            "FormatScopeColumn" => ("نطاق الصيغ", "Known format scope"),
+            "SettingsSafety" => ("يُستثنى Waves وWaveShell وWPAPI بالكامل. المجلدات المخصصة تُفحص تكراريًا للصيغ المدعومة فقط.", "Waves, WaveShell, and WPAPI are completely excluded. Custom folders are scanned recursively for supported formats only."),
+            "ResetDefaults" => ("استعادة الافتراضي", "Reset defaults"),
             "AddFolder" => ("أضف مجلدًا", "Add folder"),
             "RemoveFolder" => ("احذف المحدد", "Remove selected"),
             "SaveSettings" => ("احفظ الإعدادات", "Save settings"),
             "NoGroupsTitle" => ("لا توجد مجموعات تكرار جاهزة للمراجعة", "No duplicate groups are ready for review"),
             "NoGroupsBody" => ("نفّذ فحصًا أولًا. العناصر الفريدة، وWaves، والملفات غير المؤكدة لن تُنقل.", "Run a scan first. Unique items, Waves, and unconfirmed files will not be moved."),
-            "AliasWarning" => ("مطابقة اسم محتملة — تحتاج تأكيدك", "Possible name alias — your confirmation is required"),
-            "StrongMatch" => ("تطابق اسم الشركة والمنتج", "Exact vendor and product-name match"),
-            "ConfirmIdentity" => ("أؤكد أن هذه العناصر لنفس البلجن والجيل نفسه", "I confirm these are the same plug-in and product generation"),
-            "ChooseKeep" => ("احتفظ بهذه النسخة", "Keep this variant"),
-            "Recommended" => ("مقترحة", "RECOMMENDED"),
+            "NoFilterMatches" => ("لا توجد مجموعات تطابق نص البحث الحالي.", "No groups match the current filter text."),
+            "AliasWarning" => ("اسم ملتبس محتمل — يتطلب مراجعتك وتأكيدك اليدوي", "Possible name alias — requires your manual review and confirmation"),
+            "TieWarningBadge" => ("تعادل أو إصدارات غير قابلة للمقارنة — اختر يدويًا", "Tie or incomparable versions — manual choice required"),
+            "StrongMatch" => ("تطابق موثوق للمنتج والجيل ونوع I/O", "Exact vendor, product, generation, and I/O match"),
+            "ConfirmIdentity" => ("أؤكد يدويًا أن هذه العناصر لنفس البلجن ونفس الجيل ونفس هوية I/O", "I manually confirm these belong to the exact same plug-in, generation, and I/O variant"),
+            "Recommended" => ("مقترحة للاحتفاظ", "RECOMMENDED KEEPER"),
+            "WillKeepBadge" => ("سيتم الاحتفاظ بها", "KEEP"),
+            "WillQuarantineBadge" => ("ستُنقل إلى الحجر", "TO QUARANTINE"),
             "VersionLabel" => ("الإصدار", "Version"),
             "NoVersion" => ("غير متاح", "not reported"),
-            "ChooseTie" => ("الإصدارات متساوية أو غير مكتملة ضمن أعلى أولوية؛ اختر نسخة يدويًا.", "Versions tie or are incomplete within the winning tier; choose one manually."),
-            "KeepUntouched" => ("لا توجد نسخة مؤكدة للاحتفاظ بها؛ لن تُنقل هذه المجموعة.", "No confirmed keeper is selected; this group will not be moved."),
+            "ChooseTie" => ("تتعادل عدة نسخ في الفئة الفائزة أو يتعذر مقارنة إصداراتها بأمان؛ اختر نسخة يدويًا للاحتفاظ بها (لا تُستخدم تواريخ الملفات).", "Multiple candidates tie in the winning tier or their versions cannot be safely compared; choose a keeper manually (file dates are never used)."),
             "ScanComplete" => ("اكتمل الفحص.", "Scan complete."),
-            "ScanCanceled" => ("تم إلغاء الفحص؛ لم تُعدّل ملفات.", "Scan canceled; no files were changed."),
+            "ScanCanceled" => ("تم إلغاء الفحص؛ لم تُعدّل أي ملفات.", "Scan canceled; no files were changed."),
             "NoAction" => ("لا توجد نسخ محددة للنقل إلى الحجر.", "There are no selected variants to quarantine."),
-            "ConfirmApplyTitle" => ("تأكيد النقل إلى الحجر", "Confirm quarantine"),
-            "ConfirmApply" => ("سيتم نقل {0} عنصرًا إلى مجلد حجر قابل للاسترجاع. لن يُحذف شيء نهائيًا. هل تريد المتابعة؟", "{0} item(s) will be moved to a recoverable quarantine folder. Nothing will be permanently deleted. Continue?"),
-            "ApplyDone" => ("تم نقل {0} عنصرًا إلى الحجر. شغّل فحصًا جديدًا لتحديث النتائج.", "Moved {0} item(s) to quarantine. Run a new scan to refresh results."),
+            "ConfirmApplyTitle" => ("تأكيد النقل إلى الحجر القابل للاسترجاع", "Confirm move to recoverable quarantine"),
+            "ConfirmApply" => ("سيتم نقل {0} عنصرًا إلى مجلد الحجر القابل للاسترجاع مع حفظ المسار الأصلي لكل ملف. لن يُحذف أي ملف نهائيًا.\n\nهل تريد المتابعة؟", "{0} item(s) will be moved to the recoverable quarantine folder with their original paths recorded. Nothing will be permanently deleted.\n\nContinue?"),
+            "ApplyDone" => ("تم نقل {0} عنصرًا إلى الحجر القابل للاسترجاع بنجاح.", "Moved {0} item(s) to recoverable quarantine."),
             "ApplyPartial" => ("نُقل {0} عنصرًا، وتعذر نقل {1}. راجع الرسائل.", "Moved {0} item(s); {1} could not be moved. Review the messages."),
             "ApplyButton" => ("انقل المحدد إلى الحجر", "Move selected variants to quarantine"),
-            "AdminNotice" => ("قد يحتاج النقل من Program Files إلى موافقة مسؤول ويندوز. سيظهر طلب UAC؛ لا يبدأ النقل إلا بعد موافقتك.", "Moving items from Program Files may need Windows administrator approval. A UAC prompt will appear; nothing proceeds unless you approve."),
-            "AdminCanceled" => ("لم تتم الموافقة على صلاحيات المسؤول؛ لم يتم تنفيذ النقل.", "Administrator approval was canceled; no items were moved."),
-            "RestoreConfirm" => ("سيتم استرجاع {0} عنصرًا إلى مساراتها الأصلية. لن يتم استبدال أي ملف موجود. متابعة؟", "Restore {0} item(s) to their original paths? Existing files will never be overwritten."),
-            "RestoreDone" => ("تم استرجاع {0} عنصرًا.", "Restored {0} item(s)."),
+            "AdminNotice" => ("ملاحظة: قد يحتاج النقل من مجلدات النظام (مثل Program Files) إلى موافقة مسؤول ويندوز (UAC).", "Note: Moving items from system folders (such as Program Files) may prompt for Windows Administrator (UAC) approval."),
+            "AdminCanceled" => ("تم إلغاء موافقة المسؤول (UAC)؛ لم يتم نقل أي ملف.", "Administrator approval (UAC) was canceled; no items were moved."),
+            "RestoreConfirm" => ("سيتم استرجاع {0} عنصرًا إلى مساراتها الأصلية. لن يتم استبدال أي ملف موجود أبدًا. متابعة؟", "Restore {0} item(s) to their original paths? Existing files will never be overwritten."),
+            "RestoreDone" => ("تم استرجاع {0} عنصرًا إلى مساراتها الأصلية.", "Restored {0} item(s) to their original paths."),
             "RestorePartial" => ("تم استرجاع {0} عنصرًا، وتعذر استرجاع {1}.", "Restored {0} item(s); {1} could not be restored."),
             "FolderPicker" => ("اختر مجلد بلجنز", "Choose a plug-in folder"),
-            "ProtectedFolder" => ("هذا مسار Waves أو WPAPI محمي ولن يُضاف للفحص.", "This Waves or WPAPI location is protected and cannot be added to scanning."),
+            "ProtectedFolder" => ("هذا مسار Waves أو WPAPI محمي ومستثنى ولا يمكن إضافته للفحص.", "This Waves or WPAPI location is protected/excluded and cannot be added to scanning."),
             "FolderExists" => ("هذا المجلد موجود بالفعل في القائمة.", "This folder is already in the list."),
             "SettingsSaved" => ("تم حفظ الإعدادات.", "Settings saved."),
+            "DefaultsRestored" => ("تمت استعادة مجلدات البحث الافتراضية.", "Default scan folders restored."),
             "SelectFolder" => ("حدد مجلدًا أولًا.", "Select a folder first."),
             "NoScanYet" => ("افحص المجلدات أولًا لعرض مجموعات المراجعة.", "Scan folders first to populate the review queue."),
-            "MissingRoots" => ("مجلد بحث غير موجود أو غير قابل للقراءة", "scan folder(s) were missing or unreadable"),
-            "CandidatesFound" => ("عناصر محتملة", "candidate item(s)"),
-            "GroupsFound" => ("مجموعات", "group(s)"),
+            "MissingRoots" => ("مجلد بحث غير موجود أو متجاوز", "scan folder(s) missing or skipped"),
+            "CandidatesFound" => ("بلجن مكتشف", "recognized plug-in(s)"),
+            "GroupsFound" => ("مجموعة مراجعة", "review group(s)"),
             "VariantsLabel" => ("نسخ", "variants"),
-            "ExactMatchDetail" => ("تطابق موثوق للمنتج والجيل ونسخة I/O؛ تُطبّق أولوية المعمارية ثم الصيغة، ثم أحدث إصدار داخل الفئة الفائزة.", "High-confidence product, generation, and I/O identity; architecture and format rank first, then the newest release within the winning tier."),
-            "AliasMatchDetail" => ("تشابه اسم محتمل فقط؛ لن يُنقل شيء إلا بعد تأكيدك.", "Possible name alias only; nothing moves unless you confirm it."),
-            "TieMatchDetail" => ("تتعادل النسخ أو يتعذر مقارنة إصداراتها ضمن أعلى أولوية معمارية وصيغة؛ اختر يدويًا.", "Candidates tie or their releases cannot be compared within the top architecture/format tier; choose manually."),
+            "ExactMatchDetail" => ("تطابق المنتج والجيل ونوع I/O؛ الأولوية: x64 أولًا، ثم VST3 ← VST/DLL ← CLAP، ثم أحدث إصدار مقروء ضمن الفئة الفائزة.", "Exact product, generation, and I/O identity; ranked by x64 first, then VST3 → VST/DLL → CLAP, then newest readable release in the winning tier."),
+            "AliasMatchDetail" => ("مقترح لمراجعة اسم ملتبس؛ لا يُدمج ولا يُنقل تلقائيًا إلا بعد تأكيدك اليدوي.", "Suggested name alias for review; never merged or moved automatically without your manual confirmation."),
+            "TieMatchDetail" => ("تعادل في الفئة الفائزة أو تعذر مقارنة الإصدارات بأمان؛ المراجعة والاختيار اليدوي مطلوبان.", "Tied or incomparable versions within the winning architecture/format tier; manual review and choice required."),
             "ApplyErrorTitle" => ("تعذر تنفيذ العملية بالكامل", "Some items could not be moved"),
             "RestoreErrorTitle" => ("تعذر الاسترجاع بالكامل", "Some items could not be restored"),
-            "ProtectedWarning" => ("أي مسار يحتوي Waves/WaveShell أو WPAPI مستثنى دائمًا.", "Paths/items related to Waves, WaveShell, or WPAPI are always excluded."),
             _ => (key, key)
         };
         return _isArabic ? pair.Item1 : pair.Item2;
@@ -293,19 +371,20 @@ public partial class MainWindow : Window
         try
         {
             var result = await _scanner.ScanAsync(_settings, progress, _scanCancellation.Token);
-            _groups = PluginGroupBuilder.Build(result.Candidates);
+            _lastCandidates = result.Candidates.ToList();
+            _groups = PluginGroupBuilder.Build(_lastCandidates);
             _hasScanned = true;
             RefreshOverviewGroupRows();
             RenderGroups();
-            var recognizedCount = result.Candidates.Count(c => c.IsLikelyPlugin);
+            var recognizedCount = _lastCandidates.Count(c => c.IsLikelyPlugin);
             UpdateMetrics(recognizedCount, _groups.Count);
             ScanProgressBar.Value = 100;
-            ScanStatusText.Text = $"{L("ScanComplete")} {result.RootsScanned} / {_settings.Roots.Count} · {recognizedCount} {L("CandidatesFound")} · {_groups.Count} {L("GroupsFound")}";
+            var enabledRootsCount = _settings.Roots.Count(r => r.Enabled);
+            ScanStatusText.Text = $"{L("ScanComplete")} {result.RootsScanned} / {enabledRootsCount} · {recognizedCount} {L("CandidatesFound")} · {_groups.Count} {L("GroupsFound")}";
 
-            var warningCount = result.Warnings.Count + result.RootsMissing;
-            if (warningCount > 0)
+            if (result.Warnings.Count > 0)
             {
-                ScanStatusText.Text += $" · {warningCount} {L("MissingRoots")}";
+                ScanStatusText.Text += $" · {result.Warnings.Count} {L("MissingRoots")}";
             }
         }
         catch (OperationCanceledException)
@@ -350,8 +429,15 @@ public partial class MainWindow : Window
         }).ToList();
     }
 
+    private void ReviewSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _reviewFilter = ReviewSearchBox.Text?.Trim() ?? "";
+        RenderGroups();
+    }
+
     private void RenderGroups()
     {
+        if (GroupsPanel is null) return;
         GroupsPanel.Children.Clear();
         if (!_hasScanned)
         {
@@ -366,12 +452,31 @@ public partial class MainWindow : Window
             return;
         }
 
-        foreach (var group in _groups)
+        var visibleGroups = string.IsNullOrWhiteSpace(_reviewFilter)
+            ? _groups
+            : _groups.Where(g =>
+                g.DisplayName.Contains(_reviewFilter, StringComparison.OrdinalIgnoreCase) ||
+                g.Vendor.Contains(_reviewFilter, StringComparison.OrdinalIgnoreCase) ||
+                g.Candidates.Any(c =>
+                    c.Name.Contains(_reviewFilter, StringComparison.OrdinalIgnoreCase) ||
+                    c.Path.Contains(_reviewFilter, StringComparison.OrdinalIgnoreCase)))
+              .ToList();
+
+        if (visibleGroups.Count == 0)
+        {
+            GroupsPanel.Children.Add(CreateEmptyCard(L("NoFilterMatches")));
+            UpdateApplyButton();
+            return;
+        }
+
+        foreach (var group in visibleGroups)
         {
             var card = new Border
             {
                 Background = (Brush)FindResource("PanelBrush"),
-                BorderBrush = (Brush)FindResource("StrokeBrush"),
+                BorderBrush = group.IncludeInPlan
+                    ? new SolidColorBrush(Color.FromRgb(48, 110, 108))
+                    : (Brush)FindResource("StrokeBrush"),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(14),
                 Padding = new Thickness(16),
@@ -381,15 +486,25 @@ public partial class MainWindow : Window
             card.Child = body;
 
             var header = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 8) };
-            var candidateCount = new TextBlock
+            var candidateCount = new Border
             {
-                Text = $"{group.Candidates.Count} {L("VariantsLabel")}",
-                Foreground = (Brush)FindResource("TextMutedBrush"),
-                FontSize = 11,
-                VerticalAlignment = VerticalAlignment.Center
+                Background = new SolidColorBrush(Color.FromRgb(23, 35, 56)),
+                BorderBrush = (Brush)FindResource("StrokeBrush"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(10, 4, 10, 4),
+                VerticalAlignment = VerticalAlignment.Top,
+                Child = new TextBlock
+                {
+                    Text = $"{group.Candidates.Count} {L("VariantsLabel")}",
+                    Foreground = (Brush)FindResource("TextMutedBrush"),
+                    FontSize = 11,
+                    FontWeight = FontWeights.SemiBold
+                }
             };
-            DockPanel.SetDock(candidateCount, _isArabic ? Dock.Right : Dock.Right);
+            DockPanel.SetDock(candidateCount, Dock.Right);
             header.Children.Add(candidateCount);
+
             var titleStack = new StackPanel();
             titleStack.Children.Add(new TextBlock
             {
@@ -410,17 +525,22 @@ public partial class MainWindow : Window
             header.Children.Add(titleStack);
             body.Children.Add(header);
 
+            var statusLabel = group.NeedsIdentityConfirmation
+                ? L("AliasWarning")
+                : group.HasConflictingTopCandidates ? L("TieWarningBadge") : L("StrongMatch");
+            var statusNeedsAttention = group.NeedsIdentityConfirmation || group.HasConflictingTopCandidates;
             var matchText = new TextBlock
             {
-                Text = group.NeedsIdentityConfirmation ? L("AliasWarning") : L("StrongMatch"),
-                Foreground = group.NeedsIdentityConfirmation
+                Text = statusLabel,
+                Foreground = statusNeedsAttention
                     ? (Brush)FindResource("WarningBrush")
                     : (Brush)FindResource("AccentBrush"),
                 FontSize = 11,
                 FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 5)
+                Margin = new Thickness(0, 0, 0, 4)
             };
             body.Children.Add(matchText);
+
             var localizedSummary = group.NeedsIdentityConfirmation
                 ? L("AliasMatchDetail")
                 : group.HasConflictingTopCandidates ? L("TieMatchDetail") : L("ExactMatchDetail");
@@ -440,8 +560,9 @@ public partial class MainWindow : Window
                     Content = L("ConfirmIdentity"),
                     IsChecked = group.IsIdentityConfirmed,
                     Foreground = (Brush)FindResource("WarningBrush"),
-                    Margin = new Thickness(0, 2, 0, 10),
-                    FontSize = 12
+                    Margin = new Thickness(0, 2, 0, 8),
+                    FontSize = 12,
+                    FontWeight = FontWeights.SemiBold
                 };
                 confirm.Checked += (_, _) =>
                 {
@@ -453,6 +574,7 @@ public partial class MainWindow : Window
                 confirm.Unchecked += (_, _) =>
                 {
                     group.IsIdentityConfirmed = false;
+                    group.IncludeInPlan = false;
                     group.SelectedKeepId = null;
                     RenderGroups();
                 };
@@ -471,111 +593,163 @@ public partial class MainWindow : Window
                 });
             }
 
+            var canInteractWithGroup = !group.NeedsIdentityConfirmation || group.IsIdentityConfirmed;
             var includeGroup = new CheckBox
             {
                 Content = L("IncludeGroup"),
                 IsChecked = group.IncludeInPlan,
-                IsEnabled = !group.NeedsIdentityConfirmation || group.IsIdentityConfirmed,
+                IsEnabled = canInteractWithGroup && group.SelectedKeepId is not null,
                 Foreground = (Brush)FindResource("TextPrimaryBrush"),
-                FontSize = 11,
-                Margin = new Thickness(0, 2, 0, 8)
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 2, 0, 10)
             };
-            includeGroup.Checked += (_, _) => { group.IncludeInPlan = true; UpdateApplyButton(); };
-            includeGroup.Unchecked += (_, _) => { group.IncludeInPlan = false; UpdateApplyButton(); };
+            includeGroup.Checked += (_, _) =>
+            {
+                group.IncludeInPlan = true;
+                RenderGroups();
+            };
+            includeGroup.Unchecked += (_, _) =>
+            {
+                group.IncludeInPlan = false;
+                RenderGroups();
+            };
             body.Children.Add(includeGroup);
 
             foreach (var candidate in group.Candidates)
             {
+                var isSelectedKeeper = group.SelectedKeepId == candidate.Id;
+                var isQuarantineTarget = group.IncludeInPlan && group.SelectedKeepId is not null && !isSelectedKeeper;
+
+                var candidateBox = new Border
+                {
+                    Background = isSelectedKeeper
+                        ? new SolidColorBrush(Color.FromRgb(18, 40, 46))
+                        : new SolidColorBrush(Color.FromRgb(16, 26, 43)),
+                    BorderBrush = isSelectedKeeper
+                        ? new SolidColorBrush(Color.FromRgb(56, 138, 126))
+                        : (Brush)FindResource("StrokeBrush"),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(10),
+                    Padding = new Thickness(11, 9, 11, 9),
+                    Margin = new Thickness(0, 0, 0, 6)
+                };
+
                 var radio = new RadioButton
                 {
                     GroupName = "keep-" + group.Id.ToString("N"),
-                    IsChecked = group.SelectedKeepId == candidate.Id,
-                    IsEnabled = !group.NeedsIdentityConfirmation || group.IsIdentityConfirmed,
-                    Margin = new Thickness(0, 4, 0, 5),
+                    IsChecked = isSelectedKeeper,
+                    IsEnabled = canInteractWithGroup,
                     Foreground = (Brush)FindResource("TextPrimaryBrush"),
                     Tag = candidate,
                     VerticalContentAlignment = VerticalAlignment.Top,
                     ToolTip = candidate.DetectionNote
                 };
 
-                var candidateLayout = new StackPanel();
-                candidateLayout.Children.Add(new TextBlock
+                var candidateLayout = new StackPanel { Margin = new Thickness(6, 0, 0, 0) };
+                var titleRow = new WrapPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                titleRow.Children.Add(new TextBlock
                 {
                     Text = candidate.Name,
                     FontWeight = FontWeights.SemiBold,
                     FontSize = 12,
                     Foreground = (Brush)FindResource("TextPrimaryBrush"),
-                    TextTrimming = TextTrimming.CharacterEllipsis
+                    VerticalAlignment = VerticalAlignment.Center
                 });
+
+                if (candidate.Id == group.RecommendedKeepId)
+                {
+                    titleRow.Children.Add(CreateBadge(
+                        L("Recommended"),
+                        Color.FromRgb(24, 63, 61),
+                        (Brush)FindResource("AccentBrush")));
+                }
+
+                if (isSelectedKeeper)
+                {
+                    titleRow.Children.Add(CreateBadge(
+                        L("WillKeepBadge"),
+                        Color.FromRgb(21, 55, 74),
+                        new SolidColorBrush(Color.FromRgb(130, 216, 255))));
+                }
+                else if (isQuarantineTarget)
+                {
+                    titleRow.Children.Add(CreateBadge(
+                        L("WillQuarantineBadge"),
+                        Color.FromRgb(58, 38, 24),
+                        (Brush)FindResource("WarningBrush")));
+                }
+
+                candidateLayout.Children.Add(titleRow);
+
                 if (!string.IsNullOrWhiteSpace(candidate.Vendor) &&
                     !string.Equals(candidate.Vendor, group.Vendor, StringComparison.OrdinalIgnoreCase))
+                {
                     candidateLayout.Children.Add(new TextBlock
                     {
                         Text = candidate.Vendor,
                         FontSize = 10,
                         Foreground = (Brush)FindResource("TextMutedBrush"),
-                        Margin = new Thickness(0, 1, 0, 0)
-                    });
-                var firstLine = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0) };
-                firstLine.Children.Add(new TextBlock
-                {
-                    Text = candidate.FormatLabel,
-                    FontWeight = FontWeights.SemiBold,
-                    FontSize = 11,
-                    Foreground = (Brush)FindResource("TextPrimaryBrush")
-                });
-                firstLine.Children.Add(new TextBlock
-                {
-                    Text = "  ·  " + candidate.ArchitectureLabel,
-                    FontSize = 10,
-                    Foreground = (Brush)FindResource("TextMutedBrush")
-                });
-                if (candidate.Id == group.RecommendedKeepId)
-                {
-                    firstLine.Children.Add(new Border
-                    {
-                        Background = new SolidColorBrush(Color.FromRgb(24, 63, 61)),
-                        CornerRadius = new CornerRadius(6),
-                        Padding = new Thickness(7, 2, 7, 2),
-                        Margin = new Thickness(9, 0, 0, 0),
-                        Child = new TextBlock
-                        {
-                            Text = L("Recommended"),
-                            Foreground = (Brush)FindResource("AccentBrush"),
-                            FontSize = 9,
-                            FontWeight = FontWeights.Bold
-                        }
+                        Margin = new Thickness(0, 2, 0, 0)
                     });
                 }
-                candidateLayout.Children.Add(firstLine);
+
                 var version = string.IsNullOrWhiteSpace(candidate.Version) ? L("NoVersion") : candidate.Version;
-                candidateLayout.Children.Add(new TextBlock
+                var metaLine = new TextBlock
                 {
-                    Text = $"{L("VersionLabel")}: {version}",
+                    Text = $"{candidate.FormatLabel}  ·  {candidate.ArchitectureLabel}  ·  {L("VersionLabel")}: {version}",
+                    FontSize = 11,
                     Foreground = (Brush)FindResource("TextMutedBrush"),
-                    FontSize = 10,
-                    Margin = new Thickness(0, 2, 0, 0)
-                });
+                    Margin = new Thickness(0, 3, 0, 0)
+                };
+                candidateLayout.Children.Add(metaLine);
+
                 candidateLayout.Children.Add(new TextBlock
                 {
                     Text = candidate.Path,
                     Foreground = new SolidColorBrush(Color.FromRgb(137, 157, 182)),
-                    FontSize = 10,
+                    FontFamily = new FontFamily("Consolas, Segoe UI"),
+                    FontSize = 10.5,
                     TextWrapping = TextWrapping.Wrap,
                     FlowDirection = FlowDirection.LeftToRight,
-                    Margin = new Thickness(0, 2, 0, 0)
+                    TextAlignment = TextAlignment.Left,
+                    Margin = new Thickness(0, 3, 0, 0)
                 });
+
                 radio.Content = candidateLayout;
                 radio.Checked += (_, _) =>
                 {
+                    if (group.SelectedKeepId == candidate.Id) return;
                     group.SelectedKeepId = candidate.Id;
-                    UpdateApplyButton();
+                    RenderGroups();
                 };
-                body.Children.Add(radio);
+
+                candidateBox.Child = radio;
+                body.Children.Add(candidateBox);
             }
+
             GroupsPanel.Children.Add(card);
         }
         UpdateApplyButton();
+    }
+
+    private static Border CreateBadge(string text, Color background, Brush foreground)
+    {
+        return new Border
+        {
+            Background = new SolidColorBrush(background),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(7, 2, 7, 2),
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = text,
+                Foreground = foreground,
+                FontSize = 9.5,
+                FontWeight = FontWeights.Bold
+            }
+        };
     }
 
     private Border CreateEmptyCard(string text)
@@ -633,6 +807,20 @@ public partial class MainWindow : Window
         if (SelectRecommendedButton is not null)
             SelectRecommendedButton.IsEnabled = _groups.Any(g => !g.NeedsIdentityConfirmation &&
                 !g.HasConflictingTopCandidates && g.RecommendedKeepId is not null && !g.IncludeInPlan);
+        if (ClearSelectionButton is not null)
+            ClearSelectionButton.IsEnabled = _groups.Any(g => g.IncludeInPlan);
+    }
+
+    private void PruneMovedCandidatesFromReview()
+    {
+        if (!_hasScanned) return;
+        _lastCandidates = _lastCandidates
+            .Where(c => File.Exists(c.Path) || Directory.Exists(c.Path))
+            .ToList();
+        _groups = PluginGroupBuilder.Build(_lastCandidates);
+        RefreshOverviewGroupRows();
+        RenderGroups();
+        UpdateMetrics(_lastCandidates.Count(c => c.IsLikelyPlugin), _groups.Count);
     }
 
     private async void ApplyButton_Click(object sender, RoutedEventArgs e)
@@ -665,6 +853,7 @@ public partial class MainWindow : Window
                     if (process is null) throw new InvalidOperationException("Could not start the elevated operation.");
                     await process.WaitForExitAsync();
                     RefreshQuarantine();
+                    PruneMovedCandidatesFromReview();
                     ScanStatusText.Text = L("ScanComplete");
                     return;
                 }
@@ -677,6 +866,7 @@ public partial class MainWindow : Window
             }
 
             RefreshQuarantine();
+            PruneMovedCandidatesFromReview();
             if (result.Errors.Count == 0)
                 MessageBox.Show(string.Format(L("ApplyDone"), result.Moved.Count), "PluginShelf", MessageBoxButton.OK, MessageBoxImage.Information);
             else
@@ -703,6 +893,8 @@ public partial class MainWindow : Window
         QuarantineMetric.Text = _quarantineRows.Count.ToString();
         UpdateRestoreButton();
     }
+
+    private void RefreshQuarantineButton_Click(object sender, RoutedEventArgs e) => RefreshQuarantine();
 
     private void UpdateRestoreButton()
     {
@@ -791,7 +983,7 @@ public partial class MainWindow : Window
         }
         _settings.Roots.Add(new ScanRoot { Path = dialog.SelectedPath, Kind = RootKind.Auto, Enabled = true });
         RootsGrid.Items.Refresh();
-        UpdateMetrics(_groups.Sum(g => g.Candidates.Count), _groups.Count);
+        UpdateMetrics(_hasScanned ? _lastCandidates.Count(c => c.IsLikelyPlugin) : 0, _groups.Count);
         SettingsService.Save(_settings);
     }
 
@@ -804,18 +996,44 @@ public partial class MainWindow : Window
         }
         _settings.Roots.Remove(root);
         RootsGrid.Items.Refresh();
-        UpdateMetrics(_groups.Sum(g => g.Candidates.Count), _groups.Count);
+        UpdateMetrics(_hasScanned ? _lastCandidates.Count(c => c.IsLikelyPlugin) : 0, _groups.Count);
         SettingsService.Save(_settings);
+    }
+
+    private void ResetDefaultsButton_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.Roots = AppSettings.CreateDefaultRoots();
+        RootsGrid.ItemsSource = _settings.Roots;
+        RootsGrid.Items.Refresh();
+        SettingsService.Save(_settings);
+        UpdateMetrics(_hasScanned ? _lastCandidates.Count(c => c.IsLikelyPlugin) : 0, _groups.Count);
+        MessageBox.Show(L("DefaultsRestored"), "PluginShelf", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
     {
         RootsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
         RootsGrid.CommitEdit(DataGridEditingUnit.Row, true);
+
+        var rejectedProtected = _settings.Roots.Any(r => PluginSafety.IsProtectedPath(r.Path));
+        _settings.Roots = _settings.Roots
+            .Where(r => !string.IsNullOrWhiteSpace(r.Path) && !PluginSafety.IsProtectedPath(r.Path))
+            .ToList();
+        RootsGrid.ItemsSource = _settings.Roots;
+        RootsGrid.Items.Refresh();
+
         _settings.Language = _isArabic ? "ar" : "en";
         SettingsService.Save(_settings);
-        UpdateMetrics(_groups.Sum(g => g.Candidates.Count), _groups.Count);
-        MessageBox.Show(L("SettingsSaved"), "PluginShelf", MessageBoxButton.OK, MessageBoxImage.Information);
+        UpdateMetrics(_hasScanned ? _lastCandidates.Count(c => c.IsLikelyPlugin) : 0, _groups.Count);
+
+        if (rejectedProtected)
+        {
+            MessageBox.Show(L("ProtectedFolder"), "PluginShelf", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        else
+        {
+            MessageBox.Show(L("SettingsSaved"), "PluginShelf", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
     }
 
     private void SelectRecommendedButton_Click(object sender, RoutedEventArgs e)
@@ -829,5 +1047,22 @@ public partial class MainWindow : Window
         RenderGroups();
     }
 
+    private void ClearSelectionButton_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var group in _groups)
+        {
+            group.IncludeInPlan = false;
+        }
+        RenderGroups();
+    }
+
     private void OpenReviewButton_Click(object sender, RoutedEventArgs e) => NavigateTo("Review");
+
+    private void OverviewGroupsGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (OverviewGroupsGrid.SelectedItem is not null)
+        {
+            NavigateTo("Review");
+        }
+    }
 }

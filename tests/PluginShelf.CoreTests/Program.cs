@@ -109,6 +109,14 @@ Assert(alias.NeedsIdentityConfirmation && alias.SelectedKeepId is null,
 var n3 = PluginNameNormalizer.Normalize("Pro-Q 3", "FabFilter");
 var n4 = PluginNameNormalizer.Normalize("Pro-Q 4", "FabFilter");
 Assert(n3.CoreNameKey != n4.CoreNameKey, "Model generation digits are preserved during normalization");
+var bitnessUnderscore = PluginNameNormalizer.Normalize("Synth_64-bit", "Acme Audio");
+var bitnessX64 = PluginNameNormalizer.Normalize("Synth_x64", "Acme Audio");
+var bitnessPlain = PluginNameNormalizer.Normalize("Synth", "Acme Audio");
+Assert(bitnessUnderscore.CoreNameKey == bitnessPlain.CoreNameKey && bitnessX64.CoreNameKey == bitnessPlain.CoreNameKey,
+    "Underscore-attached bitness qualifiers are stripped cleanly during normalization");
+var model64 = PluginNameNormalizer.Normalize("C64 Synth", "Acme Audio");
+Assert(model64.CoreNameKey.Contains("c64", StringComparison.Ordinal),
+    "Model numbers like C64 remain intact during normalization");
 var volcano2 = PluginNameNormalizer.Normalize("FabFilter Volcano 2", "FabFilter");
 var volcano3 = PluginNameNormalizer.Normalize("FabFilter Volcano 3", "FabFilter");
 var volcanoMono = PluginNameNormalizer.Normalize("FabFilter Volcano 3 (Mono)", "FabFilter");
@@ -217,6 +225,19 @@ try
             $"{{\"Name\":\"FabFilter Volcano\",\"Vendor\":\"FabFilter\",\"Version\":\"{release}\",\"Classes\":[{{\"Name\":\"FabFilter Volcano\",\"Vendor\":\"FabFilter\",\"Version\":\"{release}\"}}]}}");
     }
 
+    // Shared non-distinguishing VST3 metadata (even without the word "Wrapper") falls back to the bundle name.
+    foreach (var product in new[] { "Alpha Lead", "Beta Pad" })
+    {
+        var productBundle = Path.Combine(tempRoot, "SynthCo", product + ".vst3");
+        var productBinary = Path.Combine(productBundle, "Contents", "x86_64-win");
+        var productResources = Path.Combine(productBundle, "Contents", "Resources");
+        Directory.CreateDirectory(productBinary);
+        Directory.CreateDirectory(productResources);
+        File.WriteAllBytes(Path.Combine(productBinary, product + ".vst3"), x64Fixture);
+        File.WriteAllText(Path.Combine(productResources, "moduleinfo.json"),
+            "{\"Name\":\"SynthCo Sound Engine\",\"Vendor\":\"SynthCo\",\"Version\":\"1.2.0\",\"Classes\":[{\"Category\":\"Component Controller Class\",\"Name\":\"SynthCo Controller\",\"Vendor\":\"SynthCo\",\"Version\":\"1.2.0\"},{\"Category\":\"Audio Module Class\",\"Name\":\"SynthCo Sound Engine\",\"Vendor\":\"SynthCo\",\"Version\":\"1.2.0\"}]}");
+    }
+
     var wpapiFolder = Path.Combine(tempRoot, "WPAPI");
     Directory.CreateDirectory(wpapiFolder);
     File.WriteAllBytes(Path.Combine(wpapiFolder, "WavesPublicApi.clap"), x64Fixture);
@@ -230,7 +251,7 @@ try
         Roots = new List<ScanRoot> { new() { Path = tempRoot, Kind = RootKind.Auto, Enabled = true } }
     };
     var scanResult = await new PluginScanner().ScanAsync(scanSettings, null, CancellationToken.None);
-    Assert(scanResult.Candidates.Count == 5 && scanResult.Candidates.All(c => c.Format == PluginFormat.Vst3),
+    Assert(scanResult.Candidates.Count == 7 && scanResult.Candidates.All(c => c.Format == PluginFormat.Vst3),
         "Recursive scan treats each VST3 bundle as one item and excludes WPAPI/Waves");
     Assert(scanResult.Candidates.All(c => c.Architecture == PluginArchitecture.X64 && c.IsBundle),
         "VST3 bundle architecture is detected from its architecture folder");
@@ -242,6 +263,14 @@ try
         "Generic Roland wrapper metadata falls back to each product-specific bundle folder name");
     Assert(PluginGroupBuilder.Build(rolandProducts).Count == 0,
         "Distinct Roland products with generic wrapper metadata are never grouped as duplicates");
+    var synthCoProducts = scanResult.Candidates.Where(c => c.Vendor == "SynthCo").ToList();
+    Assert(synthCoProducts.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
+               .SetEquals(new[] { "Alpha Lead", "Beta Pad" }),
+        "Shared non-distinguishing VST3 metadata falls back to each bundle's own name");
+    Assert(synthCoProducts.All(c => !c.IsMultiComponent),
+        "Controller class listed before Audio Module Class is not treated as an extra audio plug-in");
+    Assert(PluginGroupBuilder.Build(synthCoProducts).Count == 0,
+        "Distinct VST3 bundles sharing generic metadata are never merged");
     var volcanoProducts = scanResult.Candidates.Where(c => c.Vendor == "FabFilter").ToList();
     Assert(volcanoProducts.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
                .SetEquals(new[] { "FabFilter Volcano 2", "FabFilter Volcano 3" }),

@@ -66,13 +66,72 @@ public sealed class PluginScanner
             });
         }
 
-        var uniqueCandidates = result.Candidates
-            .GroupBy(c => Path.GetFullPath(c.Path), StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.First())
-            .ToList();
+        var uniqueCandidates = DisambiguateGenericVst3BundleNames(
+            result.Candidates
+                .GroupBy(c => Path.GetFullPath(c.Path), StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .ToList());
         result.Candidates.Clear();
         result.Candidates.AddRange(uniqueCandidates);
         return result;
+    }
+
+    private static List<PluginCandidate> DisambiguateGenericVst3BundleNames(List<PluginCandidate> candidates)
+    {
+        var rewrites = new Dictionary<Guid, PluginCandidate>();
+        var vst3Groups = candidates
+            .Where(c => c.Format == PluginFormat.Vst3 && !string.IsNullOrWhiteSpace(c.CoreNameKey))
+            .GroupBy(c => $"{c.VendorKey}::{c.CoreNameKey}", StringComparer.OrdinalIgnoreCase);
+
+        foreach (var group in vst3Groups)
+        {
+            var members = group.ToList();
+            if (members.Count < 2) continue;
+
+            var stemInfos = members
+                .Select(c =>
+                {
+                    var stem = Path.GetFileNameWithoutExtension(
+                        c.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                    var norm = PluginNameNormalizer.Normalize(stem, c.Vendor);
+                    return (Candidate: c, Stem: stem, Normalized: norm);
+                })
+                .Where(x => Useful(x.Stem) && !string.IsNullOrWhiteSpace(x.Normalized.CoreNameKey))
+                .ToList();
+
+            var distinctStemKeys = stemInfos
+                .Select(x => x.Normalized.CoreNameKey)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+
+            if (distinctStemKeys <= 1) continue;
+
+            foreach (var item in stemInfos)
+            {
+                rewrites[item.Candidate.Id] = new PluginCandidate
+                {
+                    Id = item.Candidate.Id,
+                    Name = item.Stem.Trim(),
+                    Vendor = item.Candidate.Vendor,
+                    Version = item.Candidate.Version,
+                    Path = item.Candidate.Path,
+                    BinaryPath = item.Candidate.BinaryPath,
+                    Format = item.Candidate.Format,
+                    Architecture = item.Candidate.Architecture,
+                    ArchitectureDetail = item.Candidate.ArchitectureDetail,
+                    IsBundle = item.Candidate.IsBundle,
+                    IsMultiComponent = item.Candidate.IsMultiComponent,
+                    IsLikelyPlugin = item.Candidate.IsLikelyPlugin,
+                    DetectionNote = item.Candidate.DetectionNote,
+                    NameKey = item.Normalized.NameKey,
+                    CoreNameKey = item.Normalized.CoreNameKey,
+                    VendorKey = item.Normalized.VendorKey
+                };
+            }
+        }
+
+        if (rewrites.Count == 0) return candidates;
+        return candidates.Select(c => rewrites.TryGetValue(c.Id, out var updated) ? updated : c).ToList();
     }
 
     private static void ScanRoot(string rootPath, RootKind rootKind, ScanResult result,
@@ -234,6 +293,7 @@ public sealed class PluginScanner
         var fileInfo = !string.IsNullOrWhiteSpace(binaryPath) ? SafeVersionInfo(binaryPath) : null;
 
         var classInfo = moduleInfo?.Classes.FirstOrDefault(IsAudioModuleClass)
+                        ?? moduleInfo?.Classes.FirstOrDefault(c => !IsNonAudioHelperClass(c))
                         ?? moduleInfo?.Classes.FirstOrDefault();
         var vendor = FirstUseful(classInfo?.Vendor, moduleInfo?.Vendor, fileInfo?.CompanyName);
         var nameCandidates = new[]
@@ -558,11 +618,18 @@ public sealed class PluginScanner
     private static bool IsAudioModuleClass(Vst3ClassInfo classInfo) =>
         classInfo.Category.Equals("Audio Module Class", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsNonAudioHelperClass(Vst3ClassInfo classInfo) =>
+        classInfo.Category.Equals("Component Controller Class", StringComparison.OrdinalIgnoreCase) ||
+        classInfo.Category.Equals("Plugin Compatibility Class", StringComparison.OrdinalIgnoreCase) ||
+        classInfo.Category.Equals("Test Class", StringComparison.OrdinalIgnoreCase);
+
     private static bool HasMultiplePluginComponents(Vst3ModuleInfo? moduleInfo)
     {
         var classes = moduleInfo?.Classes ?? new List<Vst3ClassInfo>();
         if (classes.Count <= 1) return false;
         var audioClassCount = classes.Count(IsAudioModuleClass);
+        if (audioClassCount == 1 && classes.Where(c => !IsAudioModuleClass(c)).All(IsNonAudioHelperClass))
+            return false;
         var hasUnclassified = classes.Any(c => string.IsNullOrWhiteSpace(c.Category));
         return audioClassCount > 1 || audioClassCount == 0 || hasUnclassified;
     }
@@ -590,10 +657,10 @@ public sealed class PluginScanner
 
     private static string ResolveIdentityName(string?[] candidates, string fileName, string? vendor)
     {
-        var metadataName = candidates.FirstOrDefault(n => Useful(n) && !IsGenericWrapperName(n));
+        var metadataName = candidates.FirstOrDefault(n => Useful(n) && !IsGenericWrapperName(n, vendor));
         if (string.IsNullOrWhiteSpace(metadataName)) return FirstUseful(candidates);
         if (!string.IsNullOrWhiteSpace(fileName) && Useful(fileName) &&
-            !IsGenericWrapperName(fileName) && AddsProductQualifier(fileName, metadataName, vendor))
+            !IsGenericWrapperName(fileName, vendor) && AddsProductQualifier(fileName, metadataName, vendor))
             return fileName.Trim();
         return metadataName.Trim();
     }
@@ -615,16 +682,29 @@ public sealed class PluginScanner
             (t.Any(char.IsDigit) && !ArchitectureTokens.Contains(t)));
     }
 
-    private static bool IsGenericWrapperName(string? value)
+    private static bool IsGenericWrapperName(string? value, string? vendor = null)
     {
         if (string.IsNullOrWhiteSpace(value)) return false;
         var compact = new string(value.Where(char.IsLetterOrDigit)
             .Select(char.ToLowerInvariant)
             .ToArray());
-        return compact.Contains("vst3wrapper", StringComparison.Ordinal) ||
-               compact.Contains("vstwrapper", StringComparison.Ordinal) ||
-               compact.Contains("pluginwrapper", StringComparison.Ordinal) ||
-               compact.Equals("wrapper", StringComparison.Ordinal);
+        if (compact.Contains("vst3wrapper", StringComparison.Ordinal) ||
+            compact.Contains("vstwrapper", StringComparison.Ordinal) ||
+            compact.Contains("pluginwrapper", StringComparison.Ordinal) ||
+            compact.Contains("audiowrapper", StringComparison.Ordinal) ||
+            compact.Equals("wrapper", StringComparison.Ordinal) ||
+            compact.Equals("vst3plugin", StringComparison.Ordinal) ||
+            compact.Equals("audioplugin", StringComparison.Ordinal))
+            return true;
+
+        if (!string.IsNullOrWhiteSpace(vendor))
+        {
+            var normalized = PluginNameNormalizer.Normalize(value, vendor);
+            if (!string.IsNullOrWhiteSpace(normalized.VendorKey) &&
+                string.Equals(normalized.NameKey, normalized.VendorKey, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private static FileVersionInfo? SafeVersionInfo(string? path)
