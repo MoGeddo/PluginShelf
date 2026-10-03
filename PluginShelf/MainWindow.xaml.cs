@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _scanCancellation;
     private bool _isArabic;
     private bool _hasScanned;
+    private bool _hideIncludedGroups;
     private string _reviewFilter = "";
 
     private sealed class OverviewGroupRow
@@ -244,6 +245,9 @@ public partial class MainWindow : Window
             "ReviewSubtitle" => ("النسخة المقترحة مجرد توصية؛ ضمّن المجموعات التي تريد تنظيفها بنفسك ولا يتم النقل إلا بعد موافقتك.", "The suggested keeper is only a recommendation; opt in to the groups you want cleaned. Nothing moves without your approval."),
             "SelectRecommended" => ("حدّد التوصيات الواضحة", "Select strong recommendations"),
             "ClearSelection" => ("إلغاء التحديد", "Clear selection"),
+            "HideIncluded" => ("إخفاء المجموعات المُضمّنة", "Hide included groups"),
+            "ShowIncluded" => ("إظهار المجموعات المُضمّنة", "Show included groups"),
+            "AllIncludedHidden" => ("كل المجموعات المطابقة مُضمّنة في الخطة ومخفية علشان تركّز على اللي فاضل للمراجعة اليدوية. اضغط «إظهار المجموعات المُضمّنة» لو حبيت تراجعها.", "All matching groups are included in the plan and hidden so you can focus on what still needs manual review. Press \"Show included groups\" to review them."),
             "ReviewRulesBanner" => (
                 "القواعد الثابتة: x64 أولًا ← VST3 ثم VST/DLL ثم CLAP (حتى لو كان إصدار صيغة أدنى أعلى) ← أحدث إصدار مقروء بنفس الجيل ونوع I/O (Mono / Stereo / SC منفصلة). التعادل أو الأسماء الملتبسة يُترك للمراجعة اليدوية بدون استخدام تاريخ الملف.",
                 "Strict rules: x64 first → VST3 > VST/DLL > CLAP (even if a lower format has a higher version) → newest readable release for the exact generation & I/O (Mono / Stereo / SC stay separate). Ties & aliases require manual choice; file dates are never used."),
@@ -376,6 +380,7 @@ public partial class MainWindow : Window
             _hasScanned = true;
             RefreshOverviewGroupRows();
             RenderGroups();
+            NavigateTo("Review");
             var recognizedCount = _lastCandidates.Count(c => c.IsLikelyPlugin);
             UpdateMetrics(recognizedCount, _groups.Count);
             ScanProgressBar.Value = 100;
@@ -452,7 +457,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var visibleGroups = string.IsNullOrWhiteSpace(_reviewFilter)
+        var searchedGroups = string.IsNullOrWhiteSpace(_reviewFilter)
             ? _groups
             : _groups.Where(g =>
                 g.DisplayName.Contains(_reviewFilter, StringComparison.OrdinalIgnoreCase) ||
@@ -462,9 +467,14 @@ public partial class MainWindow : Window
                     c.Path.Contains(_reviewFilter, StringComparison.OrdinalIgnoreCase)))
               .ToList();
 
+        var visibleGroups = _hideIncludedGroups
+            ? searchedGroups.Where(g => !g.IncludeInPlan).ToList()
+            : searchedGroups;
+
         if (visibleGroups.Count == 0)
         {
-            GroupsPanel.Children.Add(CreateEmptyCard(L("NoFilterMatches")));
+            GroupsPanel.Children.Add(CreateEmptyCard(
+                searchedGroups.Count > 0 ? L("AllIncludedHidden") : L("NoFilterMatches")));
             UpdateApplyButton();
             return;
         }
@@ -809,6 +819,14 @@ public partial class MainWindow : Window
                 !g.HasConflictingTopCandidates && g.RecommendedKeepId is not null && !g.IncludeInPlan);
         if (ClearSelectionButton is not null)
             ClearSelectionButton.IsEnabled = _groups.Any(g => g.IncludeInPlan);
+        if (ToggleIncludedButton is not null)
+        {
+            var includedCount = _groups.Count(g => g.IncludeInPlan);
+            ToggleIncludedButton.Visibility = includedCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+            ToggleIncludedButton.Content = _hideIncludedGroups
+                ? $"{L("ShowIncluded")} ({includedCount})"
+                : $"{L("HideIncluded")} ({includedCount})";
+        }
     }
 
     private void PruneMovedCandidatesFromReview()
@@ -1044,6 +1062,13 @@ public partial class MainWindow : Window
             group.IncludeInPlan = true;
             group.SelectedKeepId ??= group.RecommendedKeepId;
         }
+        _hideIncludedGroups = true;
+        RenderGroups();
+    }
+
+    private void ToggleIncludedButton_Click(object sender, RoutedEventArgs e)
+    {
+        _hideIncludedGroups = !_hideIncludedGroups;
         RenderGroups();
     }
 

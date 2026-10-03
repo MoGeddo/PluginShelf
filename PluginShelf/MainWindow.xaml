@@ -167,7 +167,8 @@
                     <DockPanel Grid.Row="0" Margin="0,0,0,10" LastChildFill="True">
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="12,0,0,0">
                             <Button x:Name="SelectRecommendedButton" Content="Select strong recommendations" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" Click="SelectRecommendedButton_Click" />
-                            <Button x:Name="ClearSelectionButton" Content="Clear selection" Style="{StaticResource SecondaryButton}" Click="ClearSelectionButton_Click" />
+                            <Button x:Name="ClearSelectionButton" Content="Clear selection" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" Click="ClearSelectionButton_Click" />
+                            <Button x:Name="ToggleIncludedButton" Content="Show included groups" Style="{StaticResource SecondaryButton}" Visibility="Collapsed" Click="ToggleIncludedButton_Click" />
                         </StackPanel>
                         <StackPanel>
                             <TextBlock x:Name="ReviewTitle" Text="Review format variants" FontSize="24" FontWeight="Bold" />
