@@ -69,10 +69,9 @@ public static class PluginGroupBuilder
             .ThenBy(c => c.Path, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var top = FindTopCandidates(sorted, out var versionAmbiguous);
-        var hasTie = top.Count > 1;
-        var canRecommend = !hasTie && top[0].Architecture is PluginArchitecture.X64 or PluginArchitecture.X86;
-        var recommended = canRecommend ? top[0] : null;
+        var top = FindTopCandidate(sorted);
+        var canRecommend = top.Architecture is PluginArchitecture.X64 or PluginArchitecture.X86;
+        var recommended = canRecommend ? top : null;
         var requiresManualChoice = !canRecommend;
         var displayName = members
             .OrderByDescending(c => c.Name.Length)
@@ -81,9 +80,7 @@ public static class PluginGroupBuilder
         var vendor = members.Select(c => c.Vendor)
             .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? "";
 
-        var tieDetail = versionAmbiguous
-            ? "some release versions could not be compared; choose manually"
-            : "more than one candidate has the same priority—choose manually";
+        var tieDetail = "the keeper could not be resolved automatically; choose manually";
         return new PluginGroup
         {
             DisplayName = displayName,
@@ -100,7 +97,13 @@ public static class PluginGroupBuilder
         };
     }
 
-    private static List<PluginCandidate> FindTopCandidates(List<PluginCandidate> sorted, out bool versionAmbiguous)
+    // Within the winning architecture+format tier, ties no longer demand a human:
+    // a readable embedded release outranks missing metadata, the newest readable
+    // release wins, and any remaining tie falls back to the most canonical
+    // location (shallower directory depth first, then path order). Files that
+    // carry no embedded version are usually the same product repackaged, and
+    // everything stays restorable via quarantine anyway. File dates are never used.
+    private static PluginCandidate FindTopCandidate(List<PluginCandidate> sorted)
     {
         var bestArchitecture = sorted.Min(c => c.ArchitectureRank);
         var architectureCandidates = sorted.Where(c => c.ArchitectureRank == bestArchitecture).ToList();
@@ -108,27 +111,33 @@ public static class PluginGroupBuilder
         var preferredFormatCandidates = architectureCandidates
             .Where(c => c.FormatRank == bestFormat)
             .ToList();
-        var parsed = preferredFormatCandidates
+
+        var readable = preferredFormatCandidates
             .Select(c => (Candidate: c, Version: ParseProductVersion(c.Version)))
+            .Where(x => x.Version is not null)
             .ToList();
-        var hasAnyVersion = parsed.Any(x => x.Version is not null);
-        var hasAllVersions = parsed.All(x => x.Version is not null);
-        versionAmbiguous = hasAnyVersion && !hasAllVersions;
 
-        // Format preference is decisive before release version. Within that winning tier,
-        // mixed version metadata cannot safely distinguish candidates, so require a human.
-        if (versionAmbiguous) return preferredFormatCandidates;
-
-        if (hasAllVersions)
+        if (readable.Count > 0)
         {
-            var newest = parsed.Max(x => x.Version)!;
-            return parsed.Where(x => x.Version!.Equals(newest)).Select(x => x.Candidate).ToList();
+            var newest = readable.Max(x => x.Version)!;
+            var newestReadable = readable
+                .Where(x => x.Version!.Equals(newest))
+                .Select(x => x.Candidate)
+                .ToList();
+            return MostCanonicalCandidate(newestReadable);
         }
 
-        // No comparable release metadata among the preferred-format candidates.
-        // A sole candidate is still a safe keeper; multiple candidates remain tied for review.
-        return preferredFormatCandidates;
+        return MostCanonicalCandidate(preferredFormatCandidates);
     }
+
+    private static PluginCandidate MostCanonicalCandidate(IEnumerable<PluginCandidate> tied) =>
+        tied
+            .OrderBy(c => PathDepth(c.Path))
+            .ThenBy(c => c.Path, StringComparer.OrdinalIgnoreCase)
+            .First();
+
+    private static int PathDepth(string path) =>
+        path.Count(ch => ch is '\\' or '/');
 
     private static Version? ParseProductVersion(string? text)
     {

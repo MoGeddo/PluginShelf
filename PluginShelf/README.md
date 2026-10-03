@@ -4,13 +4,13 @@ Plugin Shelf is a Windows x64 desktop utility for reviewing duplicate plug-in **
 
 ## Current rules
 
-- Ranking is explicit: architecture first (x64, then x86 only if no x64 candidate exists), then format (VST3 > VST/DLL > CLAP), then the highest readable embedded plug-in release within that architecture/format tier and the exact product-generation/I/O identity. A newer release in a lower-priority format does not outrank a higher-priority format. If two or more candidates share the winning architecture/format tier and their versions tie or cannot safely be compared, the group requires a manual choice. File modification dates are never used.
+- Ranking is explicit: architecture first (x64, then x86 only if no x64 candidate exists), then format (VST3 > VST/DLL > CLAP), then the highest readable embedded plug-in release within that architecture/format tier and the exact product-generation/I/O identity. A newer release in a lower-priority format does not outrank a higher-priority format. If two or more candidates share the winning architecture/format tier, the keeper resolves deterministically: a readable embedded release outranks missing metadata, then the newest readable release, then the nearest/shorter canonical path. Only ambiguous aliases require a manual choice. File modification dates are never used.
 - Product/model numbers and I/O qualifiers remain part of identity: for example, Pro-Q 3 and Pro-Q 4, Volcano 2 and Volcano 3, Mono and Stereo, and side-chain variants are not merged just because metadata names are similar.
 - VST3 bundles are treated as a single package. If a bundle contains x64 and x86 binaries, the entire bundle is retained; its internal files are not split or deleted. If plug-in metadata reports a generic wrapper or omits a model/channel qualifier, the VST3 bundle or binary file's own name supplies the missing identity detail.
 - FabFilter legacy VST2 suffixes such as `(Mono)`, `(SC)`, and `(Mono SC)` are retained as distinct I/O variants. The ordinary Volcano 2 VST2 and VST3 versions adapt to the track's mono/stereo layout; the fixed-mono VST2 wrappers exist for compatibility. Side-chain wrappers remain distinct because they expose different I/O.
 - A plug-in with only one recognized candidate is left alone.
 - Exact vendor + normalized product, generation, and I/O variant can form a review group. Possible name aliases (such as a vendor-prefixed name versus a short name) are suggestions only and require explicit confirmation in the UI.
-- If multiple candidates in the winning architecture/format tier tie on release version or their versions cannot safely be compared, they are surfaced for a manual keeper choice; there is no timestamp fallback.
+- If multiple candidates in the winning architecture/format tier tie on release version or their versions cannot safely be compared, the keeper is resolved deterministically (readable release first, then nearest/shorter path); there is no timestamp fallback and no manual tie prompt.
 - Waves, WaveShell and WPAPI paths/items are excluded. The supplied WPAPI directory is not included in the scan roots.
 - This first release supports VST/DLL, VST3 and CLAP. Custom folders can be added in Settings. Adding new format types is intentionally deferred until their detection rules are defined.
 
@@ -62,7 +62,7 @@ From the source package root, with the .NET 10 SDK installed:
 dotnet run --project tests/PluginShelf.CoreTests/PluginShelf.CoreTests.csproj -c Release
 ```
 
-The dependency-free checks cover generation/channel identity, semantic-version ranking, manual ties and aliases, protected paths, static PE headers, JSON5 VST3 metadata, controller-class handling, and recursive VST3/Waves/WPAPI scans.
+The dependency-free checks cover generation/channel identity, semantic-version ranking, deterministic tie-breaking and aliases, protected paths, static PE headers, JSON5 VST3 metadata, controller-class handling, and recursive VST3/Waves/WPAPI scans.
 
 ## Technical notes and references
 

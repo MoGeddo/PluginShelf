@@ -8,7 +8,7 @@ A portable Windows x64 utility for reviewing duplicate plug-in formats in FL Stu
 2. Then format preference: **VST3 > VST/DLL > CLAP**.
 3. Within the winning architecture and format, recommend the newest readable plug-in release for the exact product generation and I/O identity.
 
-A newer version in a lower-priority format does not outrank the preferred format. Ties or versions that cannot safely be compared within the winning tier require manual review. File modification dates are never used. Product generations and Mono/Stereo/side-chain variants stay separate, and Waves/WaveShell/WPAPI are excluded.
+A newer version in a lower-priority format does not outrank the preferred format. Within the winning tier, ties resolve deterministically: a readable embedded release outranks missing metadata, then the newest release, then the nearest/shorter canonical path; only ambiguous aliases require manual review. File modification dates are never used. Product generations and Mono/Stereo/side-chain variants stay separate, and Waves/WaveShell/WPAPI are excluded.
 
 See [`PluginShelf/README.md`](PluginShelf/README.md) for safety details, scan paths, references, and build notes. Portable run instructions are in [`PluginShelf-Portable/تشغيل.txt`](PluginShelf-Portable/تشغيل.txt).
 

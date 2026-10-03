@@ -82,23 +82,29 @@ var latestWithinFormat = PluginGroupBuilder.Build([
 Assert(latestWithinFormat.Candidates.Single(c => c.Id == latestWithinFormat.RecommendedKeepId).Version == "3.07",
     "Newest embedded release is chosen within the preferred architecture and format; file dates are ignored");
 
-var versionTie = PluginGroupBuilder.Build([
-    Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
-        @"C:\Audio\Vst3\Filter-a.vst3", version: "3.08"),
-    Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
-        @"D:\Audio\Vst3\Filter-b.vst3", version: "3.8.0")
-]).Single();
-Assert(versionTie.HasConflictingTopCandidates && versionTie.RecommendedKeepId is null,
-    "Same-format candidates with equal release versions require manual review");
+var tieA = Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
+    @"C:\Audio\Vst3\Filter-a.vst3", version: "3.08");
+var tieB = Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
+    @"D:\Audio\Vst3\Filter-b.vst3", version: "3.8.0");
+var versionTie = PluginGroupBuilder.Build([tieA, tieB]).Single();
+Assert(!versionTie.HasConflictingTopCandidates && versionTie.RecommendedKeepId == tieA.Id,
+    "Equal release versions resolve deterministically to the canonical (shallower/first) path");
 
-var uncertainVersion = PluginGroupBuilder.Build([
-    Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
-        @"C:\Audio\Vst3\Filter-readable.vst3", version: "3.08"),
-    Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
-        @"D:\Audio\Vst3\Filter-unknown.vst3")
-]).Single();
-Assert(uncertainVersion.HasConflictingTopCandidates && uncertainVersion.RecommendedKeepId is null,
-    "Mixed readable and missing releases in the preferred format require manual review");
+var readableCopy = Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
+    @"C:\Audio\Vst3\Filter-readable.vst3", version: "3.08");
+var unknownCopy = Candidate("Filter", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
+    @"C:\Audio\Vst3\Brainworx\Filter-unknown.vst3");
+var uncertainVersion = PluginGroupBuilder.Build([readableCopy, unknownCopy]).Single();
+Assert(!uncertainVersion.HasConflictingTopCandidates && uncertainVersion.RecommendedKeepId == readableCopy.Id,
+    "A readable embedded release outranks a copy with missing version metadata");
+
+var shallowCopy = Candidate("Bx", "Brainworx", PluginFormat.Vst3, PluginArchitecture.X64,
+    @"C:\Program Files\Common Files\VST3\bx.vst3");
+var deepCopy = Candidate("Bx", "Brainworx", PluginFormat.Vst3, PluginArchitecture.X64,
+    @"C:\Program Files\Common Files\VST3\Brainworx\bx.vst3");
+var noVersions = PluginGroupBuilder.Build([deepCopy, shallowCopy]).Single();
+Assert(noVersions.RecommendedKeepId == shallowCopy.Id,
+    "Without readable versions the nearest (shallower) canonical path wins");
 
 var aliasA = Candidate("FabFilter Pro-Q 4", "FabFilter", PluginFormat.Vst3, PluginArchitecture.X64);
 var aliasB = Candidate("Pro-Q4", "FabFilter", PluginFormat.Vst, PluginArchitecture.X64);
