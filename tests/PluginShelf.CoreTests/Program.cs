@@ -164,19 +164,19 @@ Assert(PluginSafety.IsProtectedCandidate(@"C:\Audio\VST3\WaveShell.vst3", "Waves
 var sameVstA = Candidate("Equalizer", "Acme Audio", PluginFormat.Vst, PluginArchitecture.X64,
     @"C:\Audio\Vst\Equalizer.dll");
 var sameVstB = Candidate("Equalizer", "Acme Audio", PluginFormat.Vst, PluginArchitecture.X64,
-    @"C:\Audio\AltVst\Equalizer.dll");
+    @"C:\Audio\Alt\Vst\Equalizer.dll");
 var sameFormatGroup = PluginGroupBuilder.Build([sameVstA, sameVstB]).Single();
-Assert(sameFormatGroup.HasConflictingTopCandidates && sameFormatGroup.RecommendedKeepId is null,
-    "Same-format, same-architecture duplicates are shown for manual review, not ignored or auto-selected");
+Assert(!sameFormatGroup.HasConflictingTopCandidates && sameFormatGroup.RecommendedKeepId == sameVstA.Id,
+    "Same-format, same-architecture duplicates auto-resolve to the nearest canonical path");
 
 var tiedVst3A = Candidate("Equalizer", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
     @"C:\Audio\Vst3\Equalizer.vst3");
 var tiedVst3B = Candidate("Equalizer", "Acme Audio", PluginFormat.Vst3, PluginArchitecture.X64,
-    @"C:\Audio\AltVst3\Equalizer.vst3");
+    @"C:\Audio\Alt\Vst3\Equalizer.vst3");
 var tiedVst2 = Candidate("Equalizer", "Acme Audio", PluginFormat.Vst, PluginArchitecture.X64);
 var tieGroup = PluginGroupBuilder.Build([tiedVst3A, tiedVst3B, tiedVst2]).Single();
-Assert(tieGroup.HasConflictingTopCandidates && tieGroup.RecommendedKeepId is null,
-    "Equal-priority copies require a manual keeper choice");
+Assert(!tieGroup.HasConflictingTopCandidates && tieGroup.RecommendedKeepId == tiedVst3A.Id,
+    "Equal-priority copies auto-resolve to the nearest canonical copy; no manual prompt");
 
 var x64Fixture = CreatePeFixture(machine: 0x8664, optionalMagic: 0x20B);
 var x86Fixture = CreatePeFixture(machine: 0x014C, optionalMagic: 0x10B);
