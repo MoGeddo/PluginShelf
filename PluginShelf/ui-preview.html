@@ -54,9 +54,15 @@
       </section>
 
       <section class="page" id="page-review">
-        <h1 id="reviewTitle">راجع نسخ الصيغ</h1><p class="sub" id="reviewSub">النسخة المقترحة مجرد توصية؛ ضمّن المجموعات التي تريد تنظيفها بنفسك.</p>
-        <div style="display:flex;justify-content:flex-end;margin:-5px 0 12px"><button class="btn" id="selectStrong" onclick="selectStrongGroups()">حدّد التوصيات الواضحة</button></div>
-        <div class="reviewgrid">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div><h1 id="reviewTitle">راجع نسخ الصيغ</h1><p class="sub" id="reviewSub">النسخة المقترحة مجرد توصية؛ ضمّن المجموعات التي تريد تنظيفها بنفسك.</p></div>
+          <div style="display:flex;gap:8px;margin-top:4px"><button class="btn" id="selectStrong" onclick="selectStrongGroups()">حدّد التوصيات الواضحة</button><button class="btn" id="clearSel" onclick="clearSelectedGroups()">إلغاء التحديد</button></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--stroke);background:#101829;border-radius:12px;padding:10px 14px;margin-bottom:12px;flex-wrap:wrap">
+          <span id="rulesBanner" style="font-size:11px;color:var(--muted);flex:1;min-width:260px">القواعد الثابتة: x64 أولًا ← VST3 ثم VST/DLL ثم CLAP (حتى لو كان إصدار صيغة أدنى أعلى) ← أحدث إصدار مقروء بنفس الجيل ونوع I/O (Mono / Stereo / SC منفصلة). التعادل أو الأسماء الملتبسة يُترك للمراجعة اليدوية بدون استخدام تاريخ الملف.</span>
+          <input id="reviewSearch" type="search" placeholder="صفِّ النتائج حسب اسم البلجن أو الشركة…" oninput="filterGroups()" style="width:250px;background:var(--raised);color:var(--text);border:1px solid var(--stroke);border-radius:8px;padding:7px 10px;font:inherit;font-size:12px">
+        </div>
+        <div class="reviewgrid" id="reviewGrid">
           <article class="group">
             <div class="grouphead"><div><h3>FabFilter Pro-Q 4</h3><small>FabFilter · <span id="strongMatch">تطابق موثوق للاسم والشركة</span></small></div><span class="tag" id="threeVariants">3 نسخ</span></div>
             <p class="hint" id="priorityHint">الأولوية: 64-bit أولًا، ثم VST3 ← VST ← CLAP. لا يتم استخدام تاريخ الملف.</p>
@@ -120,6 +126,8 @@ function toggleLanguage(){lang=lang==='ar'?'en':'ar';applyLang()}
 function showPage(name){document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id==='page-'+name));document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.page===name));}
 let scanned=false;function simulateScan(){if(scanned){showPage('review');return}const btn=document.getElementById('scanbtn'),bar=document.getElementById('scanbar'),status=document.getElementById('scanStatus');btn.disabled=true;status.textContent=lang==='ar'?'جاري فحص بيانات تجريبية…':'Scanning sample data…';bar.style.width='35%';setTimeout(()=>bar.style.width='70%',300);setTimeout(()=>{bar.style.width='100%';document.getElementById('candidateCount').textContent='18';document.getElementById('groupCount').textContent='3';status.textContent=dict[lang].scanDone;btn.textContent=lang==='ar'?'عرض النتائج':'View results';btn.disabled=false;scanned=true;},900)}
 function selectStrongGroups(){document.getElementById('includeProq').checked=true;updateApply()}
+function clearSelectedGroups(){document.getElementById('includeProq').checked=false;document.getElementById('includeAlias').checked=false;updateApply()}
+function filterGroups(){const q=(document.getElementById('reviewSearch')?.value||'').toLowerCase();document.querySelectorAll('#reviewGrid .group').forEach(g=>{g.style.display=!q||g.textContent.toLowerCase().includes(q)?'':'none'})}
 function aliasChanged(){const confirmed=document.getElementById('aliasConfirm').checked;const include=document.getElementById('includeAlias');include.disabled=!confirmed;if(!confirmed)include.checked=false;updateApply()}
 function updateApply(){const p=document.getElementById('includeProq'),a=document.getElementById('includeAlias'),c=document.getElementById('aliasConfirm'),button=document.getElementById('applyPreview');if(!p||!a||!c||!button)return;const count=(p.checked?2:0)+(a.checked&&c.checked?1:0);button.disabled=count===0;button.textContent=`${dict[lang].apply} (${count})`}
 function toastMessage(){const t=document.getElementById('toast');t.textContent=dict[lang].toast;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
