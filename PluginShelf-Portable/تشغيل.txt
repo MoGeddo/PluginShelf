@@ -13,7 +13,7 @@ Plugin Shelf — أداة ويندوز محمولة
 
 Waves وWaveShell وWPAPI مستثناة بالكامل. فحص هذا الإصدار يدعم VST/DLL وVST3 وCLAP، ويسمح بإضافة مجلدات بحث من الإعدادات. صيغ الملفات الجديدة مؤجلة حتى تُحدد قواعدها.
 
-النسخة محمولة ولا تحتاج تثبيت .NET. قد يعرض Windows تحذير SmartScreen لأن التطبيق غير موقّع رقميًا؛ لا تشغّل إلا الملف الذي نزّلته من هذه الحزمة.
+النسخة محمولة ولا تحتاج تثبيت .NET. قد يعرض Windows تحذير SmartScreen لأن التطبيق غير موقّع رقميًا؛ لا تشغّل إلا الملف الذي نزّلته من هذه الحزمة. لإخفاء التحذير نهائيًا على جهازك: كليك يمين على PluginShelf.exe ← خصائص (Properties) ← علّم «إلغاء الحظر» (Unblock) ثم OK.
 
 --- English ---
 
@@ -21,4 +21,4 @@ Run PluginShelf.exe on Windows 10/11 x64. Scanning is read-only. In Review, opt 
 
 Mono, Stereo, and side-chain (SC) wrappers remain distinct. For FabFilter Volcano 2, the standard VST2/VST3 version adapts to the track layout; `(Mono)`, `(SC)`, and `(Mono SC)` identify separate compatibility/I/O variants.
 
-Apply moves selected extras to a restorable quarantine and may request UAC. Restore never overwrites an existing original file. Waves/WaveShell/WPAPI are excluded. Built-in formats are VST/DLL, VST3, and CLAP. The app is self-contained and unsigned, so SmartScreen may display a warning.
+Apply moves selected extras to a restorable quarantine and may request UAC. Restore never overwrites an existing original file. Waves/WaveShell/WPAPI are excluded. Built-in formats are VST/DLL, VST3, and CLAP. The app is self-contained and unsigned, so SmartScreen may display a warning. To dismiss it permanently on your machine: right-click PluginShelf.exe → Properties → check "Unblock" → OK.
