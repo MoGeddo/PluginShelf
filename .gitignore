@@ -1,0 +1,31 @@
+# Build outputs and intermediate directories
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+artifacts/
+PluginShelf/portable/
+publish/
+
+# Visual Studio / Rider / VS Code user files
+.vs/
+.idea/
+.vscode/
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+
+# Temporary & OS files
+*.tmp
+*.bak
+*.swp
+*~
+Thumbs.db
+.DS_Store
+
+# Secrets & local environment files
+.env
+.env.*
+*.pfx
+*.snk
+*.cer

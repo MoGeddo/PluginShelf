@@ -69,6 +69,7 @@ public static class PluginGroupBuilder
         var hasTie = top.Count > 1;
         var canRecommend = !hasTie && top[0].Architecture is PluginArchitecture.X64 or PluginArchitecture.X86;
         var recommended = canRecommend ? top[0] : null;
+        var requiresManualChoice = !canRecommend;
         var displayName = members
             .OrderByDescending(c => c.Name.Length)
             .Select(c => c.Name)
@@ -83,12 +84,12 @@ public static class PluginGroupBuilder
         {
             DisplayName = displayName,
             Vendor = vendor,
-            MatchSummary = hasTie ? $"{summary}; {tieDetail}" : summary,
+            MatchSummary = requiresManualChoice ? $"{summary}; {tieDetail}" : summary,
             NeedsIdentityConfirmation = needsIdentityConfirmation,
             IsIdentityConfirmed = false,
             IncludeInPlan = false,
             IsSuggestedAlias = isAlias,
-            HasConflictingTopCandidates = hasTie,
+            HasConflictingTopCandidates = requiresManualChoice,
             Candidates = new System.Collections.ObjectModel.ObservableCollection<PluginCandidate>(sorted),
             RecommendedKeepId = recommended?.Id,
             SelectedKeepId = needsIdentityConfirmation ? null : recommended?.Id
